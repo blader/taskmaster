@@ -1,26 +1,26 @@
 #!/usr/bin/env bash
 #
-# Taskmaster installer
+# Taskmaster installer for OpenClaw
 #
-# Installs the skill + stop hook and registers it in ~/.claude/settings.json.
+# Installs the skill + stop hook and registers it in ~/.openclaw/openclaw.json.
 #
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SKILL_DIR="$HOME/.claude/skills/taskmaster"
-SETTINGS="$HOME/.claude/settings.json"
+SKILL_DIR="$HOME/.openclaw/skills/taskmaster"
+SETTINGS="$HOME/.openclaw/openclaw.json"
 
-echo "Installing Taskmaster..."
+echo "Installing Taskmaster for OpenClaw..."
 
 # 1. Copy skill files
-mkdir -p "$SKILL_DIR/hooks"
+mkdir -p "$SKILL_DIR/scripts"
 cp "$SCRIPT_DIR/SKILL.md" "$SKILL_DIR/SKILL.md"
-cp "$SCRIPT_DIR/check-completion.sh" "$SKILL_DIR/hooks/check-completion.sh"
-chmod +x "$SKILL_DIR/hooks/check-completion.sh"
+cp "$SCRIPT_DIR/scripts/check-completion.sh" "$SKILL_DIR/scripts/check-completion.sh"
+chmod +x "$SKILL_DIR/scripts/check-completion.sh"
 echo "  Skill installed to $SKILL_DIR"
 
-# 2. Register the stop hook in settings.json
-HOOK_CMD="\$HOME/.claude/skills/taskmaster/hooks/check-completion.sh"
+# 2. Register the stop hook in openclaw.json
+HOOK_CMD="\$HOME/.openclaw/skills/taskmaster/scripts/check-completion.sh"
 
 if [ ! -f "$SETTINGS" ]; then
   # No settings file — create one with just the hook
@@ -77,4 +77,4 @@ else
 fi
 
 echo ""
-echo "Done. Restart your coding agent to activate Taskmaster."
+echo "Done. Restart OpenClaw to activate Taskmaster."

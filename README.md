@@ -1,6 +1,6 @@
 # Taskmaster
 
-A stop hook for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that prevents the agent from stopping prematurely. When the agent finishes a response and is about to stop, Taskmaster intercepts and prompts it to re-examine whether all work is truly done.
+A stop hook skill for [OpenClaw](https://openclaw.ai/) agents that prevents premature stopping. When the agent finishes a response and is about to stop, Taskmaster intercepts and prompts it to re-examine whether all work is truly done.
 
 ## How It Works
 
@@ -20,19 +20,19 @@ bash install.sh
 ```
 
 This will:
-- Copy the skill to `~/.claude/skills/taskmaster/`
-- Register the stop hook in `~/.claude/settings.json`
+- Copy the skill to `~/.openclaw/skills/taskmaster/`
+- Register the stop hook in `~/.openclaw/openclaw.json`
 
-Restart your coding agent after installing.
+Restart OpenClaw after installing.
 
 ### Manual install
 
 If you prefer to install manually:
 
-1. Copy `SKILL.md` to `~/.claude/skills/taskmaster/SKILL.md`
-2. Copy `check-completion.sh` to `~/.claude/skills/taskmaster/hooks/check-completion.sh`
-3. Make it executable: `chmod +x ~/.claude/skills/taskmaster/hooks/check-completion.sh`
-4. Add this to your `~/.claude/settings.json`:
+1. Copy `SKILL.md` to `~/.openclaw/skills/taskmaster/SKILL.md`
+2. Copy `scripts/check-completion.sh` to `~/.openclaw/skills/taskmaster/scripts/check-completion.sh`
+3. Make it executable: `chmod +x ~/.openclaw/skills/taskmaster/scripts/check-completion.sh`
+4. Add this to your `~/.openclaw/openclaw.json`:
 
 ```json
 {
@@ -42,7 +42,7 @@ If you prefer to install manually:
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/skills/taskmaster/hooks/check-completion.sh",
+            "command": "$HOME/.openclaw/skills/taskmaster/scripts/check-completion.sh",
             "timeout": 10
           }
         ]
@@ -85,7 +85,7 @@ The hook **blocks** (forces continuation) otherwise, sending the agent a checkli
 
 ## Requirements
 
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) with hooks support
+- [OpenClaw](https://openclaw.ai/) with hooks support
 - `jq` (for the install script and the hook itself)
 - `bash`
 

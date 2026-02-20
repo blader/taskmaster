@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# Stop hook: keep the agent working until the plan and user requests are 100% done.
+# Taskmaster stop hook for OpenClaw agents.
+# Keeps the agent working until the plan and user requests are 100% done.
 #
 # Uses a session-scoped counter to prevent infinite loops.
 # Set TASKMASTER_MAX to change the max continuation count (default: 10, 0 = infinite).

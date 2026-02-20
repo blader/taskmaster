@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# Taskmaster uninstaller
+# Taskmaster uninstaller for OpenClaw
 #
-# Removes the skill directory and deregisters the stop hook from settings.
+# Removes the skill directory and deregisters the stop hook from openclaw.json.
 #
 set -euo pipefail
 
-SKILL_DIR="$HOME/.claude/skills/taskmaster"
-SETTINGS="$HOME/.claude/settings.json"
+SKILL_DIR="$HOME/.openclaw/skills/taskmaster"
+SETTINGS="$HOME/.openclaw/openclaw.json"
 
 echo "Uninstalling Taskmaster..."
 
@@ -19,7 +19,7 @@ else
   echo "  Skill directory not found (already removed)"
 fi
 
-# 2. Remove hook from settings.json
+# 2. Remove hook from openclaw.json
 if [ -f "$SETTINGS" ] && command -v jq &>/dev/null; then
   TMP=$(mktemp)
   jq '

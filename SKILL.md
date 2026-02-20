@@ -1,12 +1,7 @@
 ---
 name: taskmaster
-description: |
-  Stop hook that keeps the agent working until all plans and user requests are
-  100% complete. Fires when the agent tries to stop, re-examines the plan and
-  task list, and forces continuation if anything is unfinished. Prevents
-  premature stopping on multi-step tasks.
-author: blader
-version: 1.0.0
+description: Stop hook that keeps the agent working until all plans and user requests are 100% complete. Fires when the agent tries to stop, re-examines the plan and task list, and forces continuation if anything is unfinished. Prevents premature stopping on multi-step tasks.
+metadata: { "openclaw": { "requires": { "bins": ["jq", "bash"] } } }
 ---
 
 # Taskmaster
@@ -36,7 +31,13 @@ export TASKMASTER_MAX=0   # infinite — never cap (relies on stop_hook_active c
 
 ## Setup
 
-The hook must be registered in `~/.claude/settings.json`:
+Run the installer from the skill directory:
+
+```bash
+bash install.sh
+```
+
+This registers the stop hook in `~/.openclaw/openclaw.json`:
 
 ```json
 {
@@ -46,7 +47,7 @@ The hook must be registered in `~/.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/skills/taskmaster/hooks/check-completion.sh",
+            "command": "$HOME/.openclaw/skills/taskmaster/scripts/check-completion.sh",
             "timeout": 10
           }
         ]
@@ -59,5 +60,5 @@ The hook must be registered in `~/.claude/settings.json`:
 ## Disabling
 
 To temporarily disable, either:
-- Remove or comment out the Stop hook in `~/.claude/settings.json`
+- Remove or comment out the Stop hook in `~/.openclaw/openclaw.json`
 - Set `TASKMASTER_MAX=1` to allow only one continuation check
