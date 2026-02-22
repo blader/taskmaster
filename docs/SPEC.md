@@ -1,7 +1,7 @@
 # Taskmaster
 ## Product & Technical Specification
 
-**Version**: 2.1.0  
+**Version**: 2.2.0
 **Scope**: `taskmaster/hooks/check-completion.sh`, `taskmaster/SKILL.md`
 
 ## 1. Goal
@@ -39,18 +39,28 @@ On each stop event:
 7. Optional safety cap: if `TASKMASTER_MAX > 0` and counter reaches cap,
    allow stop and clear counter file.
 
-### 3.2 Prompt Injection
+### 3.2 Prompt Architecture
 
-When blocking, Taskmaster injects:
+The verbose completion checklist lives in `SKILL.md`, which is loaded as system
+context (invisible to the user in session history). The hook's `reason` field
+is kept minimal — just a label, status, and done signal — so it does not
+pollute the conversation transcript.
+
+When blocking, Taskmaster injects a brief reason:
 
 - `TASKMASTER (N)` or `TASKMASTER (N/MAX)` label.
-- A completion checklist (requests, plan, errors, loose ends, blockers).
-- The exact done line to emit when truly complete.
+- Short status (stop blocked / errors detected).
+- Reference to follow the taskmaster completion checklist.
+- The exact done signal to emit when truly complete.
+
+The full checklist (re-read user messages, check task list, check plan, check
+for errors, check for loose ends, check for blockers, honesty check) is in the
+"Completion Checklist" section of `SKILL.md`.
 
 ### 3.3 Error Signal Hinting
 
 Taskmaster inspects recent transcript lines for `"is_error": true` and adjusts
-preamble text to explicitly call out unresolved errors.
+the brief preamble text to call out unresolved errors.
 
 ## 4. Runtime Interfaces
 
