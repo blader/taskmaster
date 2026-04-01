@@ -33,20 +33,17 @@ TASKMASTER_DONE::<session_id>
 - `<session_id>` is session-scoped.
 - The line must be emitted only when that turn's work is truly complete.
 
-### 2.1 Codex Native Self-Check
+### 2.1 Codex Native Stop Contract
 
-The Codex path adds a visible final self-check requirement:
+The Codex native-hook path preserves the same completion signal as the original
+Taskmaster:
 
 ```text
-TASKMASTER_SELF_CHECK::<session_id>
-GOAL_ACHIEVED::yes|no
 TASKMASTER_DONE::<session_id>
 ```
 
-- `TASKMASTER_DONE::<session_id>` must only appear when
-  `GOAL_ACHIEVED::yes`.
-- The first stop attempt for a task is blocked by default, forcing a final
-  self-check pass.
+- The hook may continue the same turn when the token is missing.
+- There is no mandatory visible self-check protocol in the supported design.
 
 ## 3. Architecture
 
@@ -56,21 +53,20 @@ TASKMASTER_DONE::<session_id>
 
 1. Executes as a Codex `SessionStart` hook on `startup`, `resume`, and `clear`.
 2. Emits a compact durable completion contract referencing the session-scoped
-   self-check marker and done token.
+   done token.
 
 `hooks/taskmaster-stop.sh`:
 
 1. Executes as a Codex `Stop` hook.
-2. Reads `session_id`, `transcript_path`, `last_assistant_message`,
-   `stop_hook_active`, and `cwd` from hook input.
+2. Reads `session_id`, `transcript_path`, `last_assistant_message`, and `cwd`
+   from hook input.
 3. Reconstructs the active task by segmenting the transcript after the most
    recent `TASKMASTER_DONE::<session_id>`.
-4. Blocks the first stop attempt by default (`TASKMASTER_FORCE_REVIEW_PASS=1`).
-5. On repeated stop attempts, only allows stop when the latest assistant
-   message visibly contains:
-   - `TASKMASTER_SELF_CHECK::<session_id>`
-   - `GOAL_ACHIEVED::yes`
-   - `TASKMASTER_DONE::<session_id>`
+4. If the latest assistant message already contains
+   `TASKMASTER_DONE::<session_id>`, the hook allows stop immediately.
+5. Otherwise the hook blocks stop and continues Codex with:
+   - the reconstructed current-task anchor
+   - the original rich Taskmaster compliance prompt
 6. Optionally runs `TASKMASTER_VERIFY_COMMAND` in the session working
    directory. Stop stays blocked until that verifier succeeds.
 
@@ -114,8 +110,6 @@ Install updates:
 ## 5. Configuration
 
 Configurable:
-- `TASKMASTER_FORCE_REVIEW_PASS` (default `1`): Codex only. Force one blocked
-  stop pass before allowing completion.
 - `TASKMASTER_VERIFY_COMMAND`: Codex only. Require a shell verifier command
   before stop is allowed.
 - `TASKMASTER_VERIFY_MAX_OUTPUT` (default `4000`): Codex only. Limit verifier
@@ -124,7 +118,6 @@ Configurable:
 
 Fixed:
 - done token prefix: `TASKMASTER_DONE`
-- self-check prefix: `TASKMASTER_SELF_CHECK`
 
 ## 6. Operational Notes
 
@@ -132,5 +125,7 @@ Fixed:
   expect bridge in the supported architecture.
 - The stop hook segments tasks inside a long-lived Codex session using the most
   recent done token as the boundary.
-- If no prior done token exists, the stop hook falls back to the most recent
-  user messages to infer the active task.
+- If no prior done token exists, the stop hook falls back to the active user
+  instructions found in the transcript to infer the task anchor.
+- Uninstall removes Taskmaster hook entries but preserves `codex_hooks = true`
+  so unrelated native-hook workflows are not broken.

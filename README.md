@@ -30,15 +30,13 @@ A run is complete only when the assistant emits:
 TASKMASTER_DONE::<session_id>
 ```
 
-### Codex Native Self-Check
+### Codex Native Stop Contract
 
-The native Codex stop hook also requires a visible final self-check before stop
-is allowed:
+The native Codex stop hook preserves the same completion signal as the original
+Taskmaster:
 
 ```text
-TASKMASTER_SELF_CHECK::<session_id>
-GOAL_ACHIEVED::yes|no
-TASKMASTER_DONE::<session_id>   # only when GOAL_ACHIEVED::yes
+TASKMASTER_DONE::<session_id>
 ```
 
 ## How It Works
@@ -47,10 +45,11 @@ TASKMASTER_DONE::<session_id>   # only when GOAL_ACHIEVED::yes
   - Installs native `SessionStart` and `Stop` hooks in `~/.codex/hooks.json`.
   - Enables Codex hook support via `~/.codex/config.toml`.
   - `SessionStart` injects a small durable completion contract into the session.
-  - The first stop attempt for a task is blocked on purpose.
-  - The `Stop` hook reconstructs the active task from the transcript, asks for
-    a visible self-check, and only allows stop after `GOAL_ACHIEVED::yes` plus
-    the done token.
+  - The `Stop` hook reconstructs the active task from the transcript.
+  - If the latest assistant message already contains the done token, stop is
+    allowed immediately.
+  - Otherwise the `Stop` hook continues the same turn with the original rich
+    Taskmaster compliance prompt plus the reconstructed task anchor.
   - Optional repo verification can be enforced with a shell command.
 - Claude path:
   - Registers a `Stop` command hook.
@@ -107,13 +106,9 @@ Run Claude normally after install. Taskmaster hook enforcement is automatic.
 
 ## Configuration
 
-- `TASKMASTER_FORCE_REVIEW_PASS` (default `1`):
-  - Codex only.
-  - `1` forces the first stop attempt for a task to block.
-  - `0` disables the mandatory first blocked pass.
 - `TASKMASTER_VERIFY_COMMAND`:
   - Codex only.
-  - Runs a native verifier before stop is allowed after the self-check passes.
+  - Runs a native verifier before stop is allowed after the done token is present.
 - `TASKMASTER_VERIFY_MAX_OUTPUT` (default `4000`):
   - Codex only.
   - Truncates verifier output echoed back into a block reason.

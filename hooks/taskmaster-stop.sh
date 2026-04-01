@@ -9,18 +9,15 @@ INPUT="$(cat)"
 SESSION_ID="$(printf '%s' "$INPUT" | jq -r '.session_id // "unknown-session"')"
 TRANSCRIPT="$(printf '%s' "$INPUT" | jq -r '.transcript_path // ""')"
 LAST_MSG="$(printf '%s' "$INPUT" | jq -r '.last_assistant_message // ""')"
-STOP_HOOK_ACTIVE="$(printf '%s' "$INPUT" | jq -r '.stop_hook_active // false')"
 CWD="$(printf '%s' "$INPUT" | jq -r '.cwd // "."')"
 
 TRANSCRIPT="${TRANSCRIPT/#\~/$HOME}"
 DONE_SIGNAL="TASKMASTER_DONE::${SESSION_ID}"
-SELF_CHECK_SIGNAL="TASKMASTER_SELF_CHECK::${SESSION_ID}"
-FORCE_REVIEW_PASS="${TASKMASTER_FORCE_REVIEW_PASS:-1}"
 VERIFY_CMD="${TASKMASTER_VERIFY_COMMAND:-}"
 VERIFY_MAX_OUTPUT="${TASKMASTER_VERIFY_MAX_OUTPUT:-4000}"
 VERIFY_NOTE=""
 if [[ -n "$VERIFY_CMD" ]]; then
-  VERIFY_NOTE=$'\n\nA native verifier is enabled. Even after GOAL_ACHIEVED::yes and the done token, stop will stay blocked until this command passes:\n'"$VERIFY_CMD"
+  VERIFY_NOTE=$'\n\nA native verifier is enabled. Even if the done token is present, stop will stay blocked until this command passes:\n'"$VERIFY_CMD"
 fi
 
 transcript_has_recent_errors() {
@@ -182,12 +179,16 @@ if last_done_idx >= 0:
                 + "\n\n".join(f"{i + 1}. {clip(msg)}" for i, msg in enumerate(refinements))
             )
 else:
-    recent = unique_preserve_order(all_users[-4:])
+    recent = unique_preserve_order(all_users)
     if recent:
-        anchor_blocks.append(
-            "Recent active user instructions, newest task context is inferred from these messages:\n"
-            + "\n\n".join(f"{i + 1}. {clip(msg)}" for i, msg in enumerate(recent))
-        )
+        root = recent[0]
+        anchor_blocks.append("Current task root request for the active task:\n1. " + clip(root))
+        refinements = recent[1:]
+        if refinements:
+            anchor_blocks.append(
+                "Current task refinements or overrides:\n"
+                + "\n\n".join(f"{i + 1}. {clip(msg)}" for i, msg in enumerate(refinements))
+            )
 
 anchor = "\n\n".join(anchor_blocks).strip()
 if len(anchor) > 4000:
@@ -246,49 +247,14 @@ if transcript_has_recent_errors "$TRANSCRIPT"; then
   HAS_RECENT_ERRORS=true
 fi
 
-has_self_check_marker() {
-  local text="$1"
-
-  [[ -n "$text" ]] && grep -Fq "$SELF_CHECK_SIGNAL" <<<"$text" 2>/dev/null
-}
-
-has_goal_yes() {
-  local text="$1"
-
-  [[ -n "$text" ]] && grep -Eq '(^|[[:space:]])GOAL_ACHIEVED::yes($|[[:space:]])' <<<"$text" 2>/dev/null
-}
-
 has_done_signal() {
   local text="$1"
 
   [[ -n "$text" ]] && grep -Fq "$DONE_SIGNAL" <<<"$text" 2>/dev/null
 }
 
-REPEAT_MODE=false
-if [[ "$STOP_HOOK_ACTIVE" == "true" ]]; then
-  REPEAT_MODE=true
-fi
-
-if [[ "$FORCE_REVIEW_PASS" != "0" && "$REPEAT_MODE" != "true" ]]; then
-  REASON="$(build_taskmaster_stop_block_reason "$DONE_SIGNAL" "$SELF_CHECK_SIGNAL" false "$HAS_RECENT_ERRORS" "$VERIFY_NOTE" "$GOAL_ANCHOR")"
-  jq -n --arg reason "$REASON" '{ decision: "block", reason: $reason }'
-  exit 0
-fi
-
-if ! has_self_check_marker "$LAST_MSG"; then
-  REASON="$(build_taskmaster_stop_block_reason "$DONE_SIGNAL" "$SELF_CHECK_SIGNAL" true "$HAS_RECENT_ERRORS" "$VERIFY_NOTE" "$GOAL_ANCHOR")"
-  jq -n --arg reason "$REASON" '{ decision: "block", reason: $reason }'
-  exit 0
-fi
-
-if ! has_goal_yes "$LAST_MSG"; then
-  REASON="$(build_taskmaster_stop_block_reason "$DONE_SIGNAL" "$SELF_CHECK_SIGNAL" true "$HAS_RECENT_ERRORS" "$VERIFY_NOTE" "$GOAL_ANCHOR")"
-  jq -n --arg reason "$REASON" '{ decision: "block", reason: $reason }'
-  exit 0
-fi
-
 if ! has_done_signal "$LAST_MSG"; then
-  REASON="$(build_taskmaster_stop_block_reason "$DONE_SIGNAL" "$SELF_CHECK_SIGNAL" true "$HAS_RECENT_ERRORS" "$VERIFY_NOTE" "$GOAL_ANCHOR")"
+  REASON="$(build_taskmaster_stop_block_reason "$DONE_SIGNAL" "$HAS_RECENT_ERRORS" "$VERIFY_NOTE" "$GOAL_ANCHOR")"
   jq -n --arg reason "$REASON" '{ decision: "block", reason: $reason }'
   exit 0
 fi

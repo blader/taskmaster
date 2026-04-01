@@ -16,10 +16,9 @@ Taskmaster uses native hooks to enforce completion without a wrapper process.
 1. **Codex SessionStart hook** injects a compact completion contract when a
    session starts, resumes, or clears.
 2. **Codex Stop hook** reconstructs the active task from the transcript and
-   blocks the first stop attempt on purpose.
-3. **Visible self-check contract**:
-   - `TASKMASTER_SELF_CHECK::<session_id>`
-   - `GOAL_ACHIEVED::yes|no`
+   continues the same turn with the original compliance prompt when the done
+   token is missing.
+3. **Completion contract**:
    - `TASKMASTER_DONE::<session_id>` only when the goal is truly complete
 4. **Optional verifier**:
    - If `TASKMASTER_VERIFY_COMMAND` is set, stop remains blocked until that
@@ -40,8 +39,6 @@ This gives external automation a deterministic completion marker to parse.
 
 ## Configuration
 
-- `TASKMASTER_FORCE_REVIEW_PASS` (default `1`): Codex only. Force one blocked
-  stop pass before completion can be accepted.
 - `TASKMASTER_VERIFY_COMMAND`: Codex only. Require a repo verification command
   before stop is allowed.
 - `TASKMASTER_VERIFY_MAX_OUTPUT` (default `4000`): Codex only. Limit verifier

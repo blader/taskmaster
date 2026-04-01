@@ -39,37 +39,27 @@ EOF2
 
 build_taskmaster_session_contract() {
   local done_signal="$1"
-  local self_check_signal="$2"
 
   cat <<EOF2
 This session uses a completion contract.
 
 - Do not stop just because you made progress.
 - Stop only when the user's current request is fully complete.
-- The Stop hook may force one final visible self-check before completion is allowed.
-- During that final self-check, include these exact lines:
-  ${self_check_signal}
-  GOAL_ACHIEVED::yes|no
-  ${done_signal}    # include this line only if GOAL_ACHIEVED::yes
+- The Stop hook may continue the same turn if you try to stop without explicit completion.
+- When and only when the current request is truly complete, include this exact line in your final response on its own line:
+  ${done_signal}
 EOF2
 }
 
 build_taskmaster_stop_block_reason() {
   local done_signal="$1"
-  local self_check_signal="$2"
-  local repeat_mode="${3:-false}"
-  local recent_errors="${4:-false}"
-  local verify_note="${5:-}"
-  local goal_anchor="${6:-}"
+  local recent_errors="${2:-false}"
+  local verify_note="${3:-}"
+  local goal_anchor="${4:-}"
 
   local preamble="Stop is blocked until completion is explicitly confirmed."
   if [[ "$recent_errors" == "true" ]]; then
     preamble="Recent tool errors were detected. Resolve them before declaring done."
-  fi
-
-  local status_line="This is the mandatory final self-check pass. Do not stop yet."
-  if [[ "$repeat_mode" == "true" ]]; then
-    status_line="You were already blocked once. You are still not allowed to stop yet."
   fi
 
   local goal_block=""
@@ -82,24 +72,16 @@ EOF2
 )
   fi
 
+  local verifier_block=""
+  if [[ -n "$verify_note" ]]; then
+    verifier_block="${verify_note}"
+  fi
+
   cat <<EOF2
 ${preamble}
 
-${status_line}${goal_block}
+${goal_block}
 
-Before you try to stop again:
-- Re-check the active task against the repo state.
-- Finish any missing implementation, cleanup, or follow-through.
-- Run the relevant verification, such as tests, lint, type-checks, or smoke checks.
-- Do not just summarize. Either keep working, or provide a visible final self-check.
-
-In your next assistant message, include these exact lines:
-${self_check_signal}
-GOAL_ACHIEVED::yes|no
-
-Only include this exact line if GOAL_ACHIEVED::yes:
-${done_signal}${verify_note}
-
-If GOAL_ACHIEVED::no, do more work and do not emit the done token.
+$(build_taskmaster_compliance_prompt "$done_signal")${verifier_block}
 EOF2
 }

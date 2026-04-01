@@ -76,8 +76,8 @@ bin_dir = Path(sys.argv[3])
 skill_dir = Path(sys.argv[4])
 
 config_text = config_path.read_text(encoding="utf-8")
-if "codex_hooks = true" in config_text:
-    raise SystemExit("expected codex_hooks feature flag to be removed")
+if "codex_hooks = true" not in config_text:
+    raise SystemExit("expected codex_hooks feature flag to be preserved")
 if "existing_flag = true" not in config_text:
     raise SystemExit("expected unrelated config to be preserved")
 

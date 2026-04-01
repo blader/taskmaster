@@ -322,7 +322,6 @@ PY
 uninstall_codex() {
   require_python3 "Codex"
   echo "Removing Taskmaster from Codex..."
-  remove_codex_feature_flag "$CODEX_CONFIG_PATH"
   remove_codex_hooks "$CODEX_HOOKS_PATH" "$CODEX_SESSION_START_HOOK_COMMAND" "$CODEX_STOP_HOOK_COMMAND"
   remove_symlink_if_target "$CODEX_SHIM_LINK" "$CODEX_LAUNCHER_LINK" "$CODEX_RUNNER_PATH"
   remove_symlink_if_target "$CODEX_LAUNCHER_LINK" "$CODEX_RUNNER_PATH"
