@@ -4,6 +4,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STOP_HOOK="$REPO_ROOT/hooks/taskmaster-stop.sh"
+PROMPT_CAPTURE_HOOK="$REPO_ROOT/hooks/taskmaster-user-prompt-submit.sh"
 TEST_TMPDIR="$(mktemp -d "${TMPDIR:-/tmp}/taskmaster-stop-test.XXXXXX")"
 trap 'rm -rf "$TEST_TMPDIR"' EXIT
 
@@ -16,19 +17,29 @@ cat > "$TRANSCRIPT_PATH" <<'EOF'
 {"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Partial progress only."}]}}
 EOF
 
+HOME="$TEST_TMPDIR" "$PROMPT_CAPTURE_HOOK" <<'EOF'
+{
+  "session_id": "session-123",
+  "turn_id": "turn-456",
+  "prompt": "Implement native Codex hooks with exact prompt capture"
+}
+EOF
+
 first_output="$(
   jq -n \
     --arg session_id "session-123" \
+    --arg turn_id "turn-456" \
     --arg transcript_path "$TRANSCRIPT_PATH" \
     --arg last_assistant_message "Partial progress only." \
     --arg cwd "$TEST_TMPDIR" \
     '{
       session_id: $session_id,
+      turn_id: $turn_id,
       transcript_path: $transcript_path,
       last_assistant_message: $last_assistant_message,
       stop_hook_active: false,
       cwd: $cwd
-    }' | "$STOP_HOOK"
+    }' | HOME="$TEST_TMPDIR" "$STOP_HOOK"
 )"
 
 if [[ "$(printf '%s' "$first_output" | jq -r '.decision')" != "block" ]]; then
@@ -44,7 +55,7 @@ if ! grep -F "Before stopping, do each of these checks:" <<<"$first_reason" >/de
   exit 1
 fi
 
-if ! grep -F "Implement native Codex hooks" <<<"$first_reason" >/dev/null 2>&1; then
+if ! grep -F "Implement native Codex hooks with exact prompt capture" <<<"$first_reason" >/dev/null 2>&1; then
   printf 'expected current task anchor in first block reason\n' >&2
   printf '%s\n' "$first_reason" >&2
   exit 1
@@ -67,16 +78,18 @@ final_message=$'Feature is done.\nTASKMASTER_DONE::session-123'
 repeat_output="$(
   jq -n \
     --arg session_id "session-123" \
+    --arg turn_id "turn-456" \
     --arg transcript_path "$TRANSCRIPT_PATH" \
     --arg last_assistant_message "$final_message" \
     --arg cwd "$TEST_TMPDIR" \
     '{
       session_id: $session_id,
+      turn_id: $turn_id,
       transcript_path: $transcript_path,
       last_assistant_message: $last_assistant_message,
       stop_hook_active: true,
       cwd: $cwd
-    }' | "$STOP_HOOK"
+    }' | HOME="$TEST_TMPDIR" "$STOP_HOOK"
 )"
 
 if [[ -n "$repeat_output" ]]; then
@@ -88,11 +101,13 @@ fi
 verify_input="$(
   jq -n \
     --arg session_id "session-123" \
+    --arg turn_id "turn-456" \
     --arg transcript_path "$TRANSCRIPT_PATH" \
     --arg last_assistant_message "$final_message" \
     --arg cwd "$TEST_TMPDIR" \
     '{
       session_id: $session_id,
+      turn_id: $turn_id,
       transcript_path: $transcript_path,
       last_assistant_message: $last_assistant_message,
       stop_hook_active: true,
@@ -100,7 +115,7 @@ verify_input="$(
     }'
 )"
 
-verify_output="$(TASKMASTER_VERIFY_COMMAND='printf "verification failed\n" >&2; exit 1' "$STOP_HOOK" <<<"$verify_input")"
+verify_output="$(HOME="$TEST_TMPDIR" TASKMASTER_VERIFY_COMMAND='printf "verification failed\n" >&2; exit 1' "$STOP_HOOK" <<<"$verify_input")"
 
 if [[ "$(printf '%s' "$verify_output" | jq -r '.decision')" != "block" ]]; then
   printf 'expected verifier failure to block stop\n' >&2
@@ -118,16 +133,18 @@ fi
 turn_done_output="$(
   jq -n \
     --arg session_id "session-123" \
+    --arg turn_id "turn-456" \
     --arg transcript_path "$TRANSCRIPT_PATH" \
     --arg last_assistant_message "$final_message" \
     --arg cwd "$TEST_TMPDIR" \
     '{
       session_id: $session_id,
+      turn_id: $turn_id,
       transcript_path: $transcript_path,
       last_assistant_message: $last_assistant_message,
       stop_hook_active: false,
       cwd: $cwd
-    }' | "$STOP_HOOK"
+    }' | HOME="$TEST_TMPDIR" "$STOP_HOOK"
 )"
 
 if [[ -n "$turn_done_output" ]]; then

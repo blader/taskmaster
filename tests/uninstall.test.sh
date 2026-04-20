@@ -36,6 +36,16 @@ cat > "$HOOKS_PATH" <<'EOF'
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.codex/skills/taskmaster/hooks/taskmaster-user-prompt-submit.sh"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
@@ -83,12 +93,18 @@ if "existing_flag = true" not in config_text:
 
 hooks = json.loads(hooks_path.read_text(encoding="utf-8"))
 session_start = "~/.codex/skills/taskmaster/hooks/taskmaster-session-start.sh"
+user_prompt_submit = "~/.codex/skills/taskmaster/hooks/taskmaster-user-prompt-submit.sh"
 stop = "~/.codex/skills/taskmaster/hooks/taskmaster-stop.sh"
 
 for entry in hooks.get("hooks", {}).get("SessionStart", []):
     for hook in entry.get("hooks", []):
         if hook.get("command") == session_start:
             raise SystemExit("expected taskmaster session-start hook to be removed")
+
+for entry in hooks.get("hooks", {}).get("UserPromptSubmit", []):
+    for hook in entry.get("hooks", []):
+        if hook.get("command") == user_prompt_submit:
+            raise SystemExit("expected taskmaster user-prompt-submit hook to be removed")
 
 for entry in hooks.get("hooks", {}).get("Stop", []):
     for hook in entry.get("hooks", []):

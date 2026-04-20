@@ -18,6 +18,7 @@ CODEX_LAUNCHER_LINK="$CODEX_BIN_DIR/codex-taskmaster"
 CODEX_SHIM_LINK="$CODEX_BIN_DIR/codex"
 CODEX_RUNNER_PATH="$CODEX_SKILL_DIR/run-taskmaster-codex.sh"
 CODEX_SESSION_START_HOOK_COMMAND="~/.codex/skills/taskmaster/hooks/taskmaster-session-start.sh"
+CODEX_USER_PROMPT_SUBMIT_HOOK_COMMAND="~/.codex/skills/taskmaster/hooks/taskmaster-user-prompt-submit.sh"
 CODEX_STOP_HOOK_COMMAND="~/.codex/skills/taskmaster/hooks/taskmaster-stop.sh"
 
 CLAUDE_HOOKS_DIR="$CLAUDE_ROOT/hooks"
@@ -56,16 +57,20 @@ copy_skill_files() {
   safe_copy "$SCRIPT_DIR/install.sh" "$skill_dir/install.sh"
   safe_copy "$SCRIPT_DIR/uninstall.sh" "$skill_dir/uninstall.sh"
   safe_copy "$SCRIPT_DIR/taskmaster-compliance-prompt.sh" "$skill_dir/taskmaster-compliance-prompt.sh"
+  safe_copy "$SCRIPT_DIR/taskmaster-state.sh" "$skill_dir/taskmaster-state.sh"
 
   safe_copy "$SCRIPT_DIR/check-completion.sh" "$skill_dir/check-completion.sh"
   safe_copy "$SCRIPT_DIR/hooks/taskmaster-session-start.sh" "$skill_dir/hooks/taskmaster-session-start.sh"
+  safe_copy "$SCRIPT_DIR/hooks/taskmaster-user-prompt-submit.sh" "$skill_dir/hooks/taskmaster-user-prompt-submit.sh"
   safe_copy "$SCRIPT_DIR/hooks/taskmaster-stop.sh" "$skill_dir/hooks/taskmaster-stop.sh"
 
   chmod +x "$skill_dir/install.sh"
   chmod +x "$skill_dir/uninstall.sh"
   chmod +x "$skill_dir/taskmaster-compliance-prompt.sh"
+  chmod +x "$skill_dir/taskmaster-state.sh"
   chmod +x "$skill_dir/check-completion.sh"
   chmod +x "$skill_dir/hooks/taskmaster-session-start.sh"
+  chmod +x "$skill_dir/hooks/taskmaster-user-prompt-submit.sh"
   chmod +x "$skill_dir/hooks/taskmaster-stop.sh"
 }
 
@@ -172,16 +177,18 @@ PY
 ensure_codex_hooks_file() {
   local hooks_path="$1"
   local session_start_command="$2"
-  local stop_command="$3"
+  local user_prompt_submit_command="$3"
+  local stop_command="$4"
 
-  python3 - "$hooks_path" "$session_start_command" "$stop_command" <<'PY'
+  python3 - "$hooks_path" "$session_start_command" "$user_prompt_submit_command" "$stop_command" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1]).expanduser()
 session_start_command = sys.argv[2]
-stop_command = sys.argv[3]
+user_prompt_submit_command = sys.argv[3]
+stop_command = sys.argv[4]
 path.parent.mkdir(parents=True, exist_ok=True)
 
 if path.exists():
@@ -197,7 +204,7 @@ if not isinstance(hooks, dict):
     hooks = {}
     data["hooks"] = hooks
 
-taskmaster_commands = {session_start_command, stop_command}
+taskmaster_commands = {session_start_command, user_prompt_submit_command, stop_command}
 
 
 def strip_taskmaster_entries(entries):
@@ -227,6 +234,7 @@ def strip_taskmaster_entries(entries):
 
 
 hooks["SessionStart"] = strip_taskmaster_entries(hooks.get("SessionStart"))
+hooks["UserPromptSubmit"] = strip_taskmaster_entries(hooks.get("UserPromptSubmit"))
 hooks["Stop"] = strip_taskmaster_entries(hooks.get("Stop"))
 
 hooks["SessionStart"].append(
@@ -250,6 +258,18 @@ hooks["Stop"].append(
                 "command": stop_command,
                 "statusMessage": "Checking completion...",
                 "timeout": 30,
+            }
+        ],
+    }
+)
+hooks["UserPromptSubmit"].append(
+    {
+        "hooks": [
+            {
+                "type": "command",
+                "command": user_prompt_submit_command,
+                "statusMessage": "Capturing task prompt...",
+                "timeout": 15,
             }
         ],
     }
@@ -348,7 +368,7 @@ install_codex() {
   copy_skill_files "$CODEX_SKILL_DIR"
 
   ensure_codex_feature_flag "$CODEX_CONFIG_PATH" >/dev/null
-  ensure_codex_hooks_file "$CODEX_HOOKS_PATH" "$CODEX_SESSION_START_HOOK_COMMAND" "$CODEX_STOP_HOOK_COMMAND" >/dev/null
+  ensure_codex_hooks_file "$CODEX_HOOKS_PATH" "$CODEX_SESSION_START_HOOK_COMMAND" "$CODEX_USER_PROMPT_SUBMIT_HOOK_COMMAND" "$CODEX_STOP_HOOK_COMMAND" >/dev/null
   mkdir -p "$CODEX_BIN_DIR"
   remove_symlink_if_target "$CODEX_SHIM_LINK" "$CODEX_LAUNCHER_LINK" "$CODEX_RUNNER_PATH"
   remove_symlink_if_target "$CODEX_LAUNCHER_LINK" "$CODEX_RUNNER_PATH"

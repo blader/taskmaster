@@ -5,7 +5,9 @@
 **Scope**:
 - `taskmaster/check-completion.sh`
 - `taskmaster/taskmaster-compliance-prompt.sh`
+- `taskmaster/taskmaster-state.sh`
 - `taskmaster/hooks/taskmaster-session-start.sh`
+- `taskmaster/hooks/taskmaster-user-prompt-submit.sh`
 - `taskmaster/hooks/taskmaster-stop.sh`
 - `taskmaster/install.sh`
 - `taskmaster/uninstall.sh`
@@ -55,13 +57,20 @@ TASKMASTER_DONE::<session_id>
 2. Emits a compact durable completion contract referencing the session-scoped
    done token.
 
+`hooks/taskmaster-user-prompt-submit.sh`:
+
+1. Executes as a Codex `UserPromptSubmit` hook.
+2. Persists the exact user prompt for the current `session_id` + `turn_id`.
+3. Ignores Taskmaster-generated continuation prompts and pure environment-only
+   prompts.
+
 `hooks/taskmaster-stop.sh`:
 
 1. Executes as a Codex `Stop` hook.
-2. Reads `session_id`, `transcript_path`, `last_assistant_message`, and `cwd`
-   from hook input.
-3. Reconstructs the active task by segmenting the transcript after the most
-   recent `TASKMASTER_DONE::<session_id>`.
+2. Reads `session_id`, `turn_id`, `transcript_path`,
+   `last_assistant_message`, and `cwd` from hook input.
+3. Loads the exact saved turn prompt when available and otherwise reconstructs
+   the active task from the transcript.
 4. If the latest assistant message already contains
    `TASKMASTER_DONE::<session_id>`, the hook allows stop immediately.
 5. Otherwise the hook blocks stop and continues Codex with:
@@ -93,8 +102,8 @@ Override knobs:
 Install updates:
 - `~/.codex/skills/taskmaster/`
 - `~/.codex/config.toml` to ensure `[features] codex_hooks = true`
-- `~/.codex/hooks.json` to ensure Taskmaster `SessionStart` and `Stop` command
-  hooks are present
+- `~/.codex/hooks.json` to ensure Taskmaster `SessionStart`,
+  `UserPromptSubmit`, and `Stop` command hooks are present
 
 Install also removes legacy Taskmaster wrapper symlinks from:
 - `~/.codex/bin/codex`

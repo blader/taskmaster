@@ -4,9 +4,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/../taskmaster-compliance-prompt.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/../taskmaster-state.sh"
 
 INPUT="$(cat)"
 SESSION_ID="$(printf '%s' "$INPUT" | jq -r '.session_id // "unknown-session"')"
+TURN_ID="$(printf '%s' "$INPUT" | jq -r '.turn_id // ""')"
 TRANSCRIPT="$(printf '%s' "$INPUT" | jq -r '.transcript_path // ""')"
 LAST_MSG="$(printf '%s' "$INPUT" | jq -r '.last_assistant_message // ""')"
 CWD="$(printf '%s' "$INPUT" | jq -r '.cwd // "."')"
@@ -15,6 +18,7 @@ TRANSCRIPT="${TRANSCRIPT/#\~/$HOME}"
 DONE_SIGNAL="TASKMASTER_DONE::${SESSION_ID}"
 VERIFY_CMD="${TASKMASTER_VERIFY_COMMAND:-}"
 VERIFY_MAX_OUTPUT="${TASKMASTER_VERIFY_MAX_OUTPUT:-4000}"
+STATE_PATH="$(taskmaster_turn_state_path "$SESSION_ID")"
 VERIFY_NOTE=""
 if [[ -n "$VERIFY_CMD" ]]; then
   VERIFY_NOTE=$'\n\nA native verifier is enabled. Even if the done token is present, stop will stay blocked until this command passes:\n'"$VERIFY_CMD"
@@ -129,7 +133,28 @@ def extract_role_and_text(obj):
     return None, None
 
 
+def extract_event_type(obj):
+    if not isinstance(obj, dict):
+        return None
+    if obj.get("type") != "event_msg":
+        return None
+    payload = obj.get("payload")
+    if not isinstance(payload, dict):
+        return None
+    event_type = payload.get("type")
+    return event_type if isinstance(event_type, str) else None
+
+
+def is_context_only_user_message(text: str) -> bool:
+    stripped = text.lstrip()
+    if stripped.startswith("# AGENTS.md instructions for "):
+        return True
+    return stripped.startswith("<environment_context>")
+
+
 messages = []
+segments = []
+has_task_markers = False
 with path.open("r", encoding="utf-8", errors="replace") as fh:
     for raw in fh:
         raw = raw.strip()
@@ -139,23 +164,24 @@ with path.open("r", encoding="utf-8", errors="replace") as fh:
             obj = json.loads(raw)
         except Exception:
             continue
+        event_type = extract_event_type(obj)
+        if event_type == "task_started":
+            has_task_markers = True
+            segments.append([])
+            continue
         role, text = extract_role_and_text(obj)
         if role and text:
-            messages.append({"role": role, "text": text})
+            message = {"role": role, "text": text}
+            messages.append(message)
+            if has_task_markers:
+                if not segments:
+                    segments.append([])
+                segments[-1].append(message)
 
 last_done_idx = -1
 for i, message in enumerate(messages):
     if message["role"] == "assistant" and done_signal in message["text"]:
         last_done_idx = i
-
-segment = messages[last_done_idx + 1 :] if last_done_idx >= 0 else messages
-segment_users = [m["text"] for m in segment if m["role"] == "user"]
-all_users = [m["text"] for m in messages if m["role"] == "user"]
-last_assistant = ""
-for message in reversed(segment):
-    if message["role"] == "assistant":
-        last_assistant = message["text"]
-        break
 
 
 def unique_preserve_order(values):
@@ -166,8 +192,52 @@ def unique_preserve_order(values):
     return out
 
 
+def user_texts(segment_messages):
+    return [
+        message["text"]
+        for message in segment_messages
+        if message["role"] == "user" and not is_context_only_user_message(message["text"])
+    ]
+
+
+segment = []
+segment_users = []
+all_users = user_texts(messages)
+last_assistant = ""
+if has_task_markers:
+    for candidate in reversed(segments):
+        candidate_users = user_texts(candidate)
+        if candidate_users:
+            segment = candidate
+            segment_users = candidate_users
+            break
+else:
+    segment = messages[last_done_idx + 1 :] if last_done_idx >= 0 else messages
+    segment_users = user_texts(segment)
+
+if not segment and messages:
+    segment = messages
+    if not segment_users:
+        segment_users = user_texts(segment)
+
+for message in reversed(segment):
+    if message["role"] == "assistant":
+        last_assistant = message["text"]
+        break
+
+
 anchor_blocks = []
-if last_done_idx >= 0:
+if has_task_markers and segment_users:
+    unique_segment = unique_preserve_order(segment_users)
+    root = unique_segment[0]
+    anchor_blocks.append("Current task root request for the active task:\n1. " + clip(root))
+    refinements = unique_segment[1:]
+    if refinements:
+        anchor_blocks.append(
+            "Current task refinements or overrides:\n"
+            + "\n\n".join(f"{i + 1}. {clip(msg)}" for i, msg in enumerate(refinements))
+        )
+elif last_done_idx >= 0:
     if segment_users:
         unique_segment = unique_preserve_order(segment_users)
         root = unique_segment[0]
@@ -228,14 +298,26 @@ ${truncated}" '{ decision: "block", reason: $reason }'
   return 0
 }
 
+load_turn_prompt_from_state() {
+  local state_path="$1"
+  local turn_id="$2"
+  [[ -n "$turn_id" && -f "$state_path" ]] || return 0
+  jq -r --arg turn_id "$turn_id" '.turns[$turn_id].prompt // ""' "$state_path" 2>/dev/null || true
+}
+
 LAST_MSG_FALLBACK=""
 GOAL_ANCHOR=""
+TURN_PROMPT="$(load_turn_prompt_from_state "$STATE_PATH" "$TURN_ID")"
 if [[ -f "$TRANSCRIPT" ]]; then
   STATE_JSON="$(extract_active_task_state_from_transcript "$TRANSCRIPT" "$DONE_SIGNAL" || true)"
   if [[ -n "$STATE_JSON" ]]; then
     GOAL_ANCHOR="$(printf '%s' "$STATE_JSON" | jq -r '.goal_anchor // ""' 2>/dev/null || true)"
     LAST_MSG_FALLBACK="$(printf '%s' "$STATE_JSON" | jq -r '.last_assistant // ""' 2>/dev/null || true)"
   fi
+fi
+
+if [[ -n "$TURN_PROMPT" ]]; then
+  GOAL_ANCHOR=$'Current task root request for the active task:\n1. '"$TURN_PROMPT"
 fi
 
 if [[ -z "$LAST_MSG" ]]; then

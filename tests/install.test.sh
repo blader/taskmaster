@@ -61,15 +61,22 @@ if "existing_flag = true" not in config_text:
 
 hooks = json.loads(hooks_path.read_text(encoding="utf-8"))
 session_start = "~/.codex/skills/taskmaster/hooks/taskmaster-session-start.sh"
+user_prompt_submit = "~/.codex/skills/taskmaster/hooks/taskmaster-user-prompt-submit.sh"
 stop = "~/.codex/skills/taskmaster/hooks/taskmaster-stop.sh"
 
 session_start_count = 0
+user_prompt_submit_count = 0
 stop_count = 0
 other_stop_count = 0
 for entry in hooks.get("hooks", {}).get("SessionStart", []):
     for hook in entry.get("hooks", []):
         if hook.get("command") == session_start:
             session_start_count += 1
+
+for entry in hooks.get("hooks", {}).get("UserPromptSubmit", []):
+    for hook in entry.get("hooks", []):
+        if hook.get("command") == user_prompt_submit:
+            user_prompt_submit_count += 1
 
 for entry in hooks.get("hooks", {}).get("Stop", []):
     if entry.get("matcher") == "other":
@@ -80,6 +87,8 @@ for entry in hooks.get("hooks", {}).get("Stop", []):
 
 if session_start_count != 1:
     raise SystemExit(f"expected one taskmaster session-start hook, got {session_start_count}")
+if user_prompt_submit_count != 1:
+    raise SystemExit(f"expected one taskmaster user-prompt-submit hook, got {user_prompt_submit_count}")
 if stop_count != 1:
     raise SystemExit(f"expected one taskmaster stop hook, got {stop_count}")
 if other_stop_count != 1:
@@ -100,6 +109,7 @@ from pathlib import Path
 
 hooks = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 session_start = "~/.codex/skills/taskmaster/hooks/taskmaster-session-start.sh"
+user_prompt_submit = "~/.codex/skills/taskmaster/hooks/taskmaster-user-prompt-submit.sh"
 stop = "~/.codex/skills/taskmaster/hooks/taskmaster-stop.sh"
 
 session_start_count = sum(
@@ -108,6 +118,12 @@ session_start_count = sum(
     for hook in entry.get("hooks", [])
     if hook.get("command") == session_start
 )
+user_prompt_submit_count = sum(
+    1
+    for entry in hooks.get("hooks", {}).get("UserPromptSubmit", [])
+    for hook in entry.get("hooks", [])
+    if hook.get("command") == user_prompt_submit
+)
 stop_count = sum(
     1
     for entry in hooks.get("hooks", {}).get("Stop", [])
@@ -115,9 +131,12 @@ stop_count = sum(
     if hook.get("command") == stop
 )
 
-if session_start_count != 1 or stop_count != 1:
+if session_start_count != 1 or user_prompt_submit_count != 1 or stop_count != 1:
     raise SystemExit(
-        f"expected install to be idempotent; got session_start={session_start_count}, stop={stop_count}"
+        "expected install to be idempotent; got "
+        f"session_start={session_start_count}, "
+        f"user_prompt_submit={user_prompt_submit_count}, "
+        f"stop={stop_count}"
     )
 PY
 

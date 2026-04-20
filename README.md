@@ -42,10 +42,11 @@ TASKMASTER_DONE::<session_id>
 ## How It Works
 
 - Codex path:
-  - Installs native `SessionStart` and `Stop` hooks in `~/.codex/hooks.json`.
+  - Installs native `SessionStart`, `UserPromptSubmit`, and `Stop` hooks in `~/.codex/hooks.json`.
   - Enables Codex hook support via `~/.codex/config.toml`.
   - `SessionStart` injects a small durable completion contract into the session.
-  - The `Stop` hook reconstructs the active task from the transcript.
+  - `UserPromptSubmit` stores the exact user prompt that opened the turn.
+  - The `Stop` hook prefers that stored prompt and falls back to transcript reconstruction only when needed.
   - If the latest assistant message already contains the done token, stop is
     allowed immediately.
   - Otherwise the `Stop` hook continues the same turn with the original rich
@@ -80,7 +81,7 @@ Installed artifacts:
 - Codex:
   - `~/.codex/skills/taskmaster/`
   - `~/.codex/config.toml` updated with `codex_hooks = true`
-  - `~/.codex/hooks.json` updated with Taskmaster `SessionStart` and `Stop`
+  - `~/.codex/hooks.json` updated with Taskmaster `SessionStart`, `UserPromptSubmit`, and `Stop`
     hooks
 - Claude:
   - `~/.claude/skills/taskmaster/`

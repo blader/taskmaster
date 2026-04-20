@@ -16,6 +16,7 @@ CODEX_LAUNCHER_LINK="$CODEX_ROOT/bin/codex-taskmaster"
 CODEX_SHIM_LINK="$CODEX_ROOT/bin/codex"
 CODEX_RUNNER_PATH="$CODEX_SKILL_DIR/run-taskmaster-codex.sh"
 CODEX_SESSION_START_HOOK_COMMAND="~/.codex/skills/taskmaster/hooks/taskmaster-session-start.sh"
+CODEX_USER_PROMPT_SUBMIT_HOOK_COMMAND="~/.codex/skills/taskmaster/hooks/taskmaster-user-prompt-submit.sh"
 CODEX_STOP_HOOK_COMMAND="~/.codex/skills/taskmaster/hooks/taskmaster-stop.sh"
 
 CLAUDE_HOOK_LINK="$CLAUDE_ROOT/hooks/taskmaster-check-completion.sh"
@@ -152,18 +153,20 @@ PY
 remove_codex_hooks() {
   local hooks_path="$1"
   local session_start_command="$2"
-  local stop_command="$3"
+  local user_prompt_submit_command="$3"
+  local stop_command="$4"
 
   [[ -f "$hooks_path" ]] || return 0
 
-  python3 - "$hooks_path" "$session_start_command" "$stop_command" <<'PY'
+  python3 - "$hooks_path" "$session_start_command" "$user_prompt_submit_command" "$stop_command" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1]).expanduser()
 session_start_command = sys.argv[2]
-stop_command = sys.argv[3]
+user_prompt_submit_command = sys.argv[3]
+stop_command = sys.argv[4]
 data = json.loads(path.read_text(encoding="utf-8"))
 
 if not isinstance(data, dict):
@@ -173,7 +176,7 @@ hooks = data.get("hooks")
 if not isinstance(hooks, dict):
     raise SystemExit(0)
 
-taskmaster_commands = {session_start_command, stop_command}
+taskmaster_commands = {session_start_command, user_prompt_submit_command, stop_command}
 
 
 def strip_taskmaster_entries(entries):
@@ -202,7 +205,7 @@ def strip_taskmaster_entries(entries):
     return cleaned
 
 
-for key in ("SessionStart", "Stop"):
+for key in ("SessionStart", "UserPromptSubmit", "Stop"):
     cleaned = strip_taskmaster_entries(hooks.get(key))
     if cleaned:
         hooks[key] = cleaned
@@ -322,7 +325,7 @@ PY
 uninstall_codex() {
   require_python3 "Codex"
   echo "Removing Taskmaster from Codex..."
-  remove_codex_hooks "$CODEX_HOOKS_PATH" "$CODEX_SESSION_START_HOOK_COMMAND" "$CODEX_STOP_HOOK_COMMAND"
+  remove_codex_hooks "$CODEX_HOOKS_PATH" "$CODEX_SESSION_START_HOOK_COMMAND" "$CODEX_USER_PROMPT_SUBMIT_HOOK_COMMAND" "$CODEX_STOP_HOOK_COMMAND"
   remove_symlink_if_target "$CODEX_SHIM_LINK" "$CODEX_LAUNCHER_LINK" "$CODEX_RUNNER_PATH"
   remove_symlink_if_target "$CODEX_LAUNCHER_LINK" "$CODEX_RUNNER_PATH"
   remove_dir_if_exists "$CODEX_SKILL_DIR"
