@@ -2,63 +2,142 @@
 
 set -euo pipefail
 
-SCRIPT="/Users/blader/.codex/skills/taskmaster/install.sh"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT="$REPO_ROOT/install.sh"
 
-assert_single_block() {
-  local rc_path="$1"
-  local count
+TEST_HOME="$(mktemp -d "${TMPDIR:-/tmp}/taskmaster-install-test.XXXXXX")"
+trap 'rm -rf "$TEST_HOME"' EXIT
 
-  count="$(rg -c '^# TASKMASTER CODEX WRAPPER$' "$rc_path")"
-  if [[ "$count" != "1" ]]; then
-    printf 'expected exactly one Taskmaster block in %s, got %s\n' "$rc_path" "$count" >&2
-    exit 1
-  fi
+CODEX_ROOT="$TEST_HOME/.codex"
+CODEX_SKILL_DIR="$CODEX_ROOT/skills/taskmaster"
+CODEX_BIN_DIR="$CODEX_ROOT/bin"
+CONFIG_PATH="$CODEX_ROOT/config.toml"
+HOOKS_PATH="$CODEX_ROOT/hooks.json"
+
+mkdir -p "$CODEX_BIN_DIR"
+
+cat > "$CONFIG_PATH" <<'EOF'
+[features]
+existing_flag = true
+EOF
+
+cat > "$HOOKS_PATH" <<'EOF'
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "other",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.codex/other-stop.sh"
+          }
+        ]
+      }
+    ]
+  }
 }
-
-TEST_HOME_SUPERSET="$(mktemp -d "${TMPDIR:-/tmp}/taskmaster-install-test-superset.XXXXXX")"
-TEST_HOME_PLAIN="$(mktemp -d "${TMPDIR:-/tmp}/taskmaster-install-test-plain.XXXXXX")"
-trap 'rm -rf "$TEST_HOME_SUPERSET" "$TEST_HOME_PLAIN"' EXIT
-
-mkdir -p "$TEST_HOME_SUPERSET/.superset/bin"
-printf '#!/usr/bin/env bash\n' > "$TEST_HOME_SUPERSET/.superset/bin/codex"
-chmod +x "$TEST_HOME_SUPERSET/.superset/bin/codex"
-cat > "$TEST_HOME_SUPERSET/.zshrc" <<'EOF'
-export PATH="$HOME/.local/bin:$PATH"
-# Prefer the Superset codex wrapper over taskmaster and npm-global shims.
-export PATH="$HOME/.superset/bin:$PATH"
 EOF
 
-HOME="$TEST_HOME_SUPERSET" SHELL="/bin/zsh" TASKMASTER_INSTALL_TARGET=codex bash "$SCRIPT" >/dev/null
+ln -sf "$CODEX_SKILL_DIR/run-taskmaster-codex.sh" "$CODEX_BIN_DIR/codex"
+ln -sf "$CODEX_SKILL_DIR/run-taskmaster-codex.sh" "$CODEX_BIN_DIR/codex-taskmaster"
 
-superset_block_line="$(rg -n '^# TASKMASTER CODEX WRAPPER$' "$TEST_HOME_SUPERSET/.zshrc" | cut -d: -f1)"
-superset_path_line="$(rg -n '^[^\n]*\.superset/bin[^\n]*$' "$TEST_HOME_SUPERSET/.zshrc" | tail -n 1 | cut -d: -f1)"
+HOME="$TEST_HOME" SHELL="/bin/zsh" TASKMASTER_INSTALL_TARGET=codex bash "$SCRIPT" >/dev/null
 
-if [[ -z "$superset_block_line" || -z "$superset_path_line" || "$superset_block_line" -ge "$superset_path_line" ]]; then
-  printf 'expected Taskmaster block before Superset PATH line in %s\n' "$TEST_HOME_SUPERSET/.zshrc" >&2
-  sed -n '1,120p' "$TEST_HOME_SUPERSET/.zshrc" >&2
-  exit 1
-fi
+python3 - "$CONFIG_PATH" "$HOOKS_PATH" "$CODEX_BIN_DIR" <<'PY'
+import json
+import sys
+from pathlib import Path
 
-assert_single_block "$TEST_HOME_SUPERSET/.zshrc"
+config_path = Path(sys.argv[1])
+hooks_path = Path(sys.argv[2])
+bin_dir = Path(sys.argv[3])
 
-HOME="$TEST_HOME_SUPERSET" SHELL="/bin/zsh" TASKMASTER_INSTALL_TARGET=codex bash "$SCRIPT" >/dev/null
-assert_single_block "$TEST_HOME_SUPERSET/.zshrc"
+config_text = config_path.read_text(encoding="utf-8")
+if "codex_hooks = true" not in config_text:
+    raise SystemExit("expected codex_hooks feature flag to be enabled")
+if "existing_flag = true" not in config_text:
+    raise SystemExit("expected existing config to be preserved")
 
-cat > "$TEST_HOME_PLAIN/.zshrc" <<'EOF'
-export PATH="/opt/homebrew/bin:$PATH"
-EOF
+hooks = json.loads(hooks_path.read_text(encoding="utf-8"))
+session_start = "~/.codex/skills/taskmaster/hooks/taskmaster-session-start.sh"
+user_prompt_submit = "~/.codex/skills/taskmaster/hooks/taskmaster-user-prompt-submit.sh"
+stop = "~/.codex/skills/taskmaster/hooks/taskmaster-stop.sh"
 
-HOME="$TEST_HOME_PLAIN" SHELL="/bin/zsh" TASKMASTER_INSTALL_TARGET=codex bash "$SCRIPT" >/dev/null
+session_start_count = 0
+user_prompt_submit_count = 0
+stop_count = 0
+other_stop_count = 0
+for entry in hooks.get("hooks", {}).get("SessionStart", []):
+    for hook in entry.get("hooks", []):
+        if hook.get("command") == session_start:
+            session_start_count += 1
 
-plain_block_line="$(rg -n '^# TASKMASTER CODEX WRAPPER$' "$TEST_HOME_PLAIN/.zshrc" | cut -d: -f1)"
-plain_existing_line="$(rg -n '^export PATH="/opt/homebrew/bin:\$PATH"$' "$TEST_HOME_PLAIN/.zshrc" | cut -d: -f1)"
+for entry in hooks.get("hooks", {}).get("UserPromptSubmit", []):
+    for hook in entry.get("hooks", []):
+        if hook.get("command") == user_prompt_submit:
+            user_prompt_submit_count += 1
 
-if [[ -z "$plain_block_line" || -z "$plain_existing_line" || "$plain_block_line" -le "$plain_existing_line" ]]; then
-  printf 'expected Taskmaster block appended after existing PATH content in %s\n' "$TEST_HOME_PLAIN/.zshrc" >&2
-  sed -n '1,120p' "$TEST_HOME_PLAIN/.zshrc" >&2
-  exit 1
-fi
+for entry in hooks.get("hooks", {}).get("Stop", []):
+    if entry.get("matcher") == "other":
+        other_stop_count += 1
+    for hook in entry.get("hooks", []):
+        if hook.get("command") == stop:
+            stop_count += 1
 
-assert_single_block "$TEST_HOME_PLAIN/.zshrc"
+if session_start_count != 1:
+    raise SystemExit(f"expected one taskmaster session-start hook, got {session_start_count}")
+if user_prompt_submit_count != 1:
+    raise SystemExit(f"expected one taskmaster user-prompt-submit hook, got {user_prompt_submit_count}")
+if stop_count != 1:
+    raise SystemExit(f"expected one taskmaster stop hook, got {stop_count}")
+if other_stop_count != 1:
+    raise SystemExit("expected unrelated stop hook entries to be preserved")
+
+for name in ("codex", "codex-taskmaster"):
+    path = bin_dir / name
+    if path.exists() or path.is_symlink():
+        raise SystemExit(f"expected legacy wrapper link to be removed: {path}")
+PY
+
+HOME="$TEST_HOME" SHELL="/bin/zsh" TASKMASTER_INSTALL_TARGET=codex bash "$SCRIPT" >/dev/null
+
+python3 - "$HOOKS_PATH" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+hooks = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+session_start = "~/.codex/skills/taskmaster/hooks/taskmaster-session-start.sh"
+user_prompt_submit = "~/.codex/skills/taskmaster/hooks/taskmaster-user-prompt-submit.sh"
+stop = "~/.codex/skills/taskmaster/hooks/taskmaster-stop.sh"
+
+session_start_count = sum(
+    1
+    for entry in hooks.get("hooks", {}).get("SessionStart", [])
+    for hook in entry.get("hooks", [])
+    if hook.get("command") == session_start
+)
+user_prompt_submit_count = sum(
+    1
+    for entry in hooks.get("hooks", {}).get("UserPromptSubmit", [])
+    for hook in entry.get("hooks", [])
+    if hook.get("command") == user_prompt_submit
+)
+stop_count = sum(
+    1
+    for entry in hooks.get("hooks", {}).get("Stop", [])
+    for hook in entry.get("hooks", [])
+    if hook.get("command") == stop
+)
+
+if session_start_count != 1 or user_prompt_submit_count != 1 or stop_count != 1:
+    raise SystemExit(
+        "expected install to be idempotent; got "
+        f"session_start={session_start_count}, "
+        f"user_prompt_submit={user_prompt_submit_count}, "
+        f"stop={stop_count}"
+    )
+PY
 
 echo "ok"

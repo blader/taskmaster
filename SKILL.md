@@ -1,30 +1,30 @@
 ---
 name: taskmaster
 description: |
-  Codex wrapper plus same-process expect PTY injector
-  that keeps work moving until an explicit parseable done signal is emitted.
+  Native Codex SessionStart/Stop hooks plus a Claude stop hook
+  that keep work moving until an explicit parseable done signal is emitted.
 author: blader
-version: 4.2.0
+version: 5.0.0
 ---
 
 # Taskmaster
 
-Taskmaster for Codex uses session-log polling plus automatic continuation.
-Codex TUI does not currently expose arbitrary writable stop hooks, so this
-skill implements the same completion contract externally.
+Taskmaster uses native hooks to enforce completion without a wrapper process.
 
 ## How It Works
 
-1. **Run Codex via wrapper**: `run-taskmaster-codex.sh` sets
-   `CODEX_TUI_RECORD_SESSION=1` and a log path.
-2. **Injector parses log events** and checks completion on each
-   `task_complete` event.
-3. **Parseable token contract**:
-   `TASKMASTER_DONE::<session_id>`
-4. **Token missing**:
-   - inject follow-up user message into the same running process via
-     expect PTY bridge transport, using the shared compliance prompt.
-5. **Token present**: no further injection.
+1. **Codex SessionStart hook** injects a compact completion contract when a
+   session starts, resumes, or clears.
+2. **Codex Stop hook** reconstructs the active task from the transcript and
+   continues the same turn with the original compliance prompt when the done
+   token is missing.
+3. **Completion contract**:
+   - `TASKMASTER_DONE::<session_id>` only when the goal is truly complete
+4. **Optional verifier**:
+   - If `TASKMASTER_VERIFY_COMMAND` is set, stop remains blocked until that
+     command passes.
+5. **Claude path** keeps the existing stop-hook enforcement based on the done
+   token plus the shared compliance prompt.
 
 ## Parseable Done Signal
 
@@ -39,14 +39,11 @@ This gives external automation a deterministic completion marker to parse.
 
 ## Configuration
 
-- `TASKMASTER_MAX` (default `0`): max warning count before suppression in the
-  stop hook. `0` means unlimited warnings.
-
-Fixed behavior (not configurable):
-- Done token prefix: `TASKMASTER_DONE`
-- Poll interval: `1` second
-- Transport: expect only
-- Expect payload mode and submit delay are fixed
+- `TASKMASTER_VERIFY_COMMAND`: Codex only. Require a repo verification command
+  before stop is allowed.
+- `TASKMASTER_VERIFY_MAX_OUTPUT` (default `4000`): Codex only. Limit verifier
+  output echoed back into the hook block reason.
+- `TASKMASTER_MAX` (default `0`): Claude only. Limit repeated stop warnings.
 
 ## Setup
 
@@ -54,5 +51,5 @@ Install and run:
 
 ```bash
 bash ~/.codex/skills/taskmaster/install.sh
-codex-taskmaster
+codex
 ```

@@ -36,3 +36,52 @@ ${done_signal}
 Do NOT emit that done signal early. If any work remains, continue working now.
 EOF2
 }
+
+build_taskmaster_session_contract() {
+  local done_signal="$1"
+
+  cat <<EOF2
+This session uses a completion contract.
+
+- Do not stop just because you made progress.
+- Stop only when the user's current request is fully complete.
+- The Stop hook may continue the same turn if you try to stop without explicit completion.
+- When and only when the current request is truly complete, include this exact line in your final response on its own line:
+  ${done_signal}
+EOF2
+}
+
+build_taskmaster_stop_block_reason() {
+  local done_signal="$1"
+  local recent_errors="${2:-false}"
+  local verify_note="${3:-}"
+  local goal_anchor="${4:-}"
+
+  local preamble="Stop is blocked until completion is explicitly confirmed."
+  if [[ "$recent_errors" == "true" ]]; then
+    preamble="Recent tool errors were detected. Resolve them before declaring done."
+  fi
+
+  local goal_block=""
+  if [[ -n "$goal_anchor" ]]; then
+    goal_block=$(cat <<EOF2
+
+Current task anchor reconstructed from the transcript:
+${goal_anchor}
+EOF2
+)
+  fi
+
+  local verifier_block=""
+  if [[ -n "$verify_note" ]]; then
+    verifier_block="${verify_note}"
+  fi
+
+  cat <<EOF2
+${preamble}
+
+${goal_block}
+
+$(build_taskmaster_compliance_prompt "$done_signal")${verifier_block}
+EOF2
+}

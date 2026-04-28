@@ -19,8 +19,8 @@ Taskmaster is built around one idea: progress is not completion.
   Compliance prompts force the model back to the user’s actual request, not its
   own local notion of “good enough”.
 - Automation-safe signaling:
-  A deterministic done token makes completion parseable for wrappers and
-  CI-style flows.
+  A deterministic done token makes completion parseable for stop hooks and
+  external tooling.
 
 ## Core Contract
 
@@ -30,34 +30,32 @@ A run is complete only when the assistant emits:
 TASKMASTER_DONE::<session_id>
 ```
 
-If that token is missing at stop time, Taskmaster blocks stop and pushes the
-current turn to continue. Codex monitoring stays active for later turns in the
-same long-lived session.
+### Codex Native Stop Contract
 
-### Enforcement Prompt
+The native Codex stop hook preserves the same completion signal as the original
+Taskmaster:
 
-Taskmaster uses one shared compliance prompt for both Codex and Claude.
-
-- Codex: the wrapper/injector path injects this shared prompt back into the
-  same running session when stop conditions are not met.
-- Claude: the Stop hook returns this same shared prompt as the block reason.
-
-The shared prompt source lives in `taskmaster-compliance-prompt.sh`.
+```text
+TASKMASTER_DONE::<session_id>
+```
 
 ## How It Works
 
 - Codex path:
-  - Runs through a wrapper (`codex` shim / `codex-taskmaster` launcher).
-  - Enables Codex session logs.
-  - Watches `task_complete` / `turn_complete` events.
-  - If done token is missing, injects a continuation prompt into the same
-    running Codex process via expect PTY.
-  - A done token suppresses injection for that completed turn only; it does
-    not permanently disable Taskmaster for future turns in the same session.
+  - Installs native `SessionStart`, `UserPromptSubmit`, and `Stop` hooks in `~/.codex/hooks.json`.
+  - Enables Codex hook support via `~/.codex/config.toml`.
+  - `SessionStart` injects a small durable completion contract into the session.
+  - `UserPromptSubmit` stores the exact user prompt that opened the turn.
+  - The `Stop` hook prefers that stored prompt and falls back to transcript reconstruction only when needed.
+  - If the latest assistant message already contains the done token, stop is
+    allowed immediately.
+  - Otherwise the `Stop` hook continues the same turn with the original rich
+    Taskmaster compliance prompt plus the reconstructed task anchor.
+  - Optional repo verification can be enforced with a shell command.
 - Claude path:
   - Registers a `Stop` command hook.
-  - Hook runs `check-completion.sh`.
-  - If done token is missing, the stop is blocked with corrective feedback.
+  - The hook runs `check-completion.sh`.
+  - If the done token is missing, the stop is blocked with corrective feedback.
 
 ## Install
 
@@ -82,8 +80,9 @@ TASKMASTER_INSTALL_TARGET=both bash ~/.codex/skills/taskmaster/install.sh
 Installed artifacts:
 - Codex:
   - `~/.codex/skills/taskmaster/`
-  - `~/.codex/bin/codex-taskmaster`
-  - `~/.codex/bin/codex` (shim to Taskmaster wrapper)
+  - `~/.codex/config.toml` updated with `codex_hooks = true`
+  - `~/.codex/hooks.json` updated with Taskmaster `SessionStart`, `UserPromptSubmit`, and `Stop`
+    hooks
 - Claude:
   - `~/.claude/skills/taskmaster/`
   - `~/.claude/hooks/taskmaster-check-completion.sh`
@@ -93,23 +92,14 @@ Installed artifacts:
 
 ### Codex
 
-Run normally:
+Run Codex normally:
 
 ```bash
 codex [args]
 ```
 
-Explicit alias is also available:
-
-```bash
-codex-taskmaster [args]
-```
-
-Interactive resume is also supported:
-
-```bash
-codex resume [session-or-thread]
-```
+The Taskmaster hooks activate automatically on startup, resume, clear, and
+stop.
 
 ### Claude
 
@@ -117,7 +107,14 @@ Run Claude normally after install. Taskmaster hook enforcement is automatic.
 
 ## Configuration
 
+- `TASKMASTER_VERIFY_COMMAND`:
+  - Codex only.
+  - Runs a native verifier before stop is allowed after the done token is present.
+- `TASKMASTER_VERIFY_MAX_OUTPUT` (default `4000`):
+  - Codex only.
+  - Truncates verifier output echoed back into a block reason.
 - `TASKMASTER_MAX` (default `0`):
+  - Claude only.
   - Limits stop-block warnings in hook checks.
   - `0` means unlimited warnings.
 
@@ -142,12 +139,11 @@ TASKMASTER_UNINSTALL_TARGET=both bash ~/.codex/skills/taskmaster/uninstall.sh
 
 - `bash`
 - `jq`
+- `python3`
 - Codex integration:
-  - Codex CLI
-  - `expect`
+  - Codex CLI with native hooks support enabled
 - Claude integration:
   - Claude Code with `Stop` hooks enabled
-  - `python3` (for install/uninstall settings updates)
 
 ## License
 

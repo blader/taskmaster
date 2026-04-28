@@ -10,9 +10,14 @@ CLAUDE_ROOT="$HOME/.claude"
 CODEX_SKILL_DIR="$CODEX_ROOT/skills/taskmaster"
 CLAUDE_SKILL_DIR="$CLAUDE_ROOT/skills/taskmaster"
 
+CODEX_CONFIG_PATH="$CODEX_ROOT/config.toml"
+CODEX_HOOKS_PATH="$CODEX_ROOT/hooks.json"
 CODEX_LAUNCHER_LINK="$CODEX_ROOT/bin/codex-taskmaster"
 CODEX_SHIM_LINK="$CODEX_ROOT/bin/codex"
 CODEX_RUNNER_PATH="$CODEX_SKILL_DIR/run-taskmaster-codex.sh"
+CODEX_SESSION_START_HOOK_COMMAND="~/.codex/skills/taskmaster/hooks/taskmaster-session-start.sh"
+CODEX_USER_PROMPT_SUBMIT_HOOK_COMMAND="~/.codex/skills/taskmaster/hooks/taskmaster-user-prompt-submit.sh"
+CODEX_STOP_HOOK_COMMAND="~/.codex/skills/taskmaster/hooks/taskmaster-stop.sh"
 
 CLAUDE_HOOK_LINK="$CLAUDE_ROOT/hooks/taskmaster-check-completion.sh"
 CLAUDE_CHECK_SCRIPT="$CLAUDE_SKILL_DIR/check-completion.sh"
@@ -32,6 +37,15 @@ codex_artifacts_detected() {
 
 claude_artifacts_detected() {
   [[ -e "$CLAUDE_SKILL_DIR" || -L "$CLAUDE_HOOK_LINK" || -f "$CLAUDE_SETTINGS_PATH" ]]
+}
+
+require_python3() {
+  local target="$1"
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "  ${target}: python3 is required for config updates" >&2
+    exit 1
+  fi
 }
 
 resolve_link_target() {
@@ -85,6 +99,124 @@ remove_dir_if_exists() {
   else
     echo "  Directory not found (already removed): $dir_path"
   fi
+}
+
+remove_codex_feature_flag() {
+  local config_path="$1"
+
+  [[ -f "$config_path" ]] || return 0
+
+  python3 - "$config_path" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1]).expanduser()
+lines = path.read_text(encoding="utf-8").splitlines()
+
+section_idx = None
+section_end = len(lines)
+for idx, line in enumerate(lines):
+    if re.match(r"^\s*\[features\]\s*$", line):
+        section_idx = idx
+        for next_idx in range(idx + 1, len(lines)):
+            if re.match(r"^\s*\[.*\]\s*$", lines[next_idx]):
+                section_end = next_idx
+                break
+        break
+
+if section_idx is not None:
+    filtered_section = []
+    removed = False
+    for idx in range(section_idx + 1, section_end):
+        if re.match(r"^\s*codex_hooks\s*=", lines[idx]):
+            removed = True
+            continue
+        filtered_section.append(lines[idx])
+    if removed:
+        keep_section = any(line.strip() and not line.lstrip().startswith("#") for line in filtered_section)
+        prefix = lines[:section_idx]
+        suffix = lines[section_end:]
+        if keep_section:
+            lines = prefix + [lines[section_idx]] + filtered_section + suffix
+        else:
+            lines = prefix + suffix
+
+output = "\n".join(lines).strip()
+if output:
+    path.write_text(output + "\n", encoding="utf-8")
+else:
+    path.write_text("", encoding="utf-8")
+PY
+}
+
+remove_codex_hooks() {
+  local hooks_path="$1"
+  local session_start_command="$2"
+  local user_prompt_submit_command="$3"
+  local stop_command="$4"
+
+  [[ -f "$hooks_path" ]] || return 0
+
+  python3 - "$hooks_path" "$session_start_command" "$user_prompt_submit_command" "$stop_command" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1]).expanduser()
+session_start_command = sys.argv[2]
+user_prompt_submit_command = sys.argv[3]
+stop_command = sys.argv[4]
+data = json.loads(path.read_text(encoding="utf-8"))
+
+if not isinstance(data, dict):
+    raise SystemExit("Codex hooks file must contain a JSON object")
+
+hooks = data.get("hooks")
+if not isinstance(hooks, dict):
+    raise SystemExit(0)
+
+taskmaster_commands = {session_start_command, user_prompt_submit_command, stop_command}
+
+
+def strip_taskmaster_entries(entries):
+    cleaned = []
+    for entry in entries if isinstance(entries, list) else []:
+        if not isinstance(entry, dict):
+            cleaned.append(entry)
+            continue
+        entry_hooks = entry.get("hooks")
+        if not isinstance(entry_hooks, list):
+            cleaned.append(entry)
+            continue
+        kept_hooks = [
+            hook
+            for hook in entry_hooks
+            if not (
+                isinstance(hook, dict)
+                and hook.get("type") == "command"
+                and hook.get("command") in taskmaster_commands
+            )
+        ]
+        if kept_hooks:
+            entry_copy = dict(entry)
+            entry_copy["hooks"] = kept_hooks
+            cleaned.append(entry_copy)
+    return cleaned
+
+
+for key in ("SessionStart", "UserPromptSubmit", "Stop"):
+    cleaned = strip_taskmaster_entries(hooks.get(key))
+    if cleaned:
+        hooks[key] = cleaned
+    elif key in hooks:
+        del hooks[key]
+
+if not hooks and "hooks" in data:
+    del data["hooks"]
+
+path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+PY
 }
 
 remove_claude_stop_hook_from_settings() {
@@ -191,7 +323,9 @@ PY
 }
 
 uninstall_codex() {
+  require_python3 "Codex"
   echo "Removing Taskmaster from Codex..."
+  remove_codex_hooks "$CODEX_HOOKS_PATH" "$CODEX_SESSION_START_HOOK_COMMAND" "$CODEX_USER_PROMPT_SUBMIT_HOOK_COMMAND" "$CODEX_STOP_HOOK_COMMAND"
   remove_symlink_if_target "$CODEX_SHIM_LINK" "$CODEX_LAUNCHER_LINK" "$CODEX_RUNNER_PATH"
   remove_symlink_if_target "$CODEX_LAUNCHER_LINK" "$CODEX_RUNNER_PATH"
   remove_dir_if_exists "$CODEX_SKILL_DIR"
