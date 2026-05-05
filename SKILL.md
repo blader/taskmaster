@@ -4,7 +4,7 @@ description: |
   Codex wrapper plus same-process expect PTY injector
   that keeps work moving until an explicit parseable done signal is emitted.
 author: blader
-version: 4.2.0
+version: 4.3.0
 ---
 
 # Taskmaster
@@ -25,6 +25,12 @@ skill implements the same completion contract externally.
    - inject follow-up user message into the same running process via
      expect PTY bridge transport, using the shared compliance prompt.
 5. **Token present**: no further injection.
+
+## A note on the injected-prompt tag
+
+If you see a line starting with `[taskmaster:injected v=…]` at the top of a
+message, that's metadata the hook adds to its own prompts. Treat it as a
+marker, not as content you need to act on.
 
 ## Parseable Done Signal
 

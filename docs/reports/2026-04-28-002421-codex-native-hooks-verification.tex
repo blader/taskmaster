@@ -1,0 +1,681 @@
+\documentclass[twocolumn,10pt,letterpaper]{article}
+
+% -- Page geometry --
+\usepackage[
+  top=0.85in,
+  bottom=0.75in,
+  left=0.65in,
+  right=0.65in,
+  columnsep=0.25in
+]{geometry}
+
+% -- Beautiful typography: Century Schoolbook --
+\usepackage[T1]{fontenc}
+\usepackage{tgschola}              % TeX Gyre Schola (Century Schoolbook)
+\usepackage[scaled=0.82]{beramono} % Bera Mono for code
+\usepackage{microtype}             % Microtypographic refinements
+\usepackage{setspace}              % Line spacing control
+\setstretch{1.08}                  % Slightly open leading for readability
+
+% -- Packages --
+\usepackage{xurl}        % Allow URL breaks at any character (load before hyperref)
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{booktabs}    % Professional tables
+\usepackage{tabularx}    % Width-constrained tables
+\usepackage{enumitem}    % List customization
+\usepackage{fancyhdr}
+\usepackage{xcolor}
+\usepackage{balance}
+\usepackage{stfloats}    % Enable [h] placement for table* in two-column layout
+\usepackage{titlesec}    % Section heading customization
+\usepackage{listings}    % Code blocks with line wrapping
+
+% -- Paragraph spacing (no indent, modest skip) --
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.4em plus 0.1em minus 0.05em}
+\setlength{\emergencystretch}{1em}  % Extra stretch to avoid overfull hboxes in narrow columns
+
+% -- Code listings with line wrapping --
+\lstset{
+  basicstyle=\small\ttfamily,
+  breaklines=true,
+  breakatwhitespace=false,
+  breakautoindent=true,
+  postbreak=\mbox{\textcolor{accentrule}{$\hookrightarrow$}\space},
+  columns=fullflexible,
+  keepspaces=true,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codebg},
+  framesep=3pt,
+  aboveskip=0.5em,
+  belowskip=0.5em,
+  xleftmargin=4pt,
+  xrightmargin=0pt,
+}
+
+% -- Colors --
+\definecolor{linkblue}{HTML}{1D4ED8}
+\definecolor{headergray}{HTML}{1F2937}
+\definecolor{rulegray}{HTML}{D1D5DB}
+\definecolor{titlebg}{HTML}{111827}
+\definecolor{accentrule}{HTML}{6B7280}
+\definecolor{brandred}{HTML}{8B2635}
+\definecolor{codebg}{HTML}{F3F4F6}    % Very light gray for code backgrounds
+
+% -- Hyperlinks --
+\hypersetup{
+    colorlinks=true,
+    linkcolor=linkblue,
+    urlcolor=linkblue,
+    citecolor=linkblue,
+    pdfstartview=FitH
+}
+
+% -- Section numbering: Roman > Alph > Arabic > alph, no decimals --
+\renewcommand{\thesection}{\Roman{section}}
+\renewcommand{\thesubsection}{\Alph{subsection}}
+\renewcommand{\thesubsubsection}{\arabic{subsubsection}}
+\renewcommand{\theparagraph}{\alph{paragraph}}
+\makeatletter
+\@addtoreset{subsection}{section}
+\@addtoreset{subsubsection}{subsection}
+\@addtoreset{paragraph}{subsubsection}
+\makeatother
+
+% -- Section headings --
+\titleformat{\section}
+  {\large\bfseries\color{titlebg}}
+  {\thesection.}{0.5em}{}
+  [\vspace{-0.3em}{\color{accentrule}\rule{\columnwidth}{0.5pt}}]
+\titleformat{\subsection}
+  {\normalsize\bfseries\color{headergray}}
+  {\thesubsection.}{0.4em}{}
+\titleformat{\subsubsection}
+  {\small\bfseries\itshape\color{headergray}}
+  {\thesubsubsection.}{0.4em}{}
+\titleformat{\paragraph}[runin]
+  {\small\bfseries\color{headergray}}
+  {\theparagraph)}{0.4em}{}[.\hspace{0.4em}]
+\titlespacing*{\section}{0pt}{1.0em}{0.35em}
+\titlespacing*{\subsection}{0pt}{0.75em}{0.2em}
+\titlespacing*{\subsubsection}{0pt}{0.55em}{0.15em}
+\titlespacing*{\paragraph}{0pt}{0.4em}{0em}
+
+% -- Lists: compact, elegant --
+\setlist{nosep, leftmargin=1.1em, topsep=0.2em, itemsep=0.05em}
+\setlist[itemize]{label={\small\textcolor{accentrule}{\textbullet}}}
+\setlist[enumerate]{label={\small\textcolor{headergray}{\arabic*.}}}
+
+% -- Tables: tighter, small text --
+\renewcommand{\arraystretch}{1.15}
+
+% -- Header/footer (pages 2+) --
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.3pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{rulegray}\leaders\hrule height \headrulewidth\hfill}}
+\fancyhead[L]{\footnotesize\color{headergray}\textit{Codex Native Hooks: Verification Before Adopting mickn's Architecture}}
+\renewcommand{\footrulewidth}{0.3pt}
+\renewcommand{\footrule}{\hbox to\headwidth{\color{rulegray}\leaders\hrule height \footrulewidth\hfill}}
+% Brand mark footer: CaseMirror wordmark left, page number right (both burgundy)
+\fancyfoot[L]{\footnotesize\textbf{\color{headergray}CaseMirror}}
+\fancyfoot[R]{\footnotesize\color{headergray}\thepage}
+
+% -- Page 1 style: footer only, no header rule --
+\fancypagestyle{firstpage}{%
+  \fancyhf{}%
+  \renewcommand{\headrulewidth}{0pt}%
+  \renewcommand{\footrulewidth}{0.3pt}%
+  \renewcommand{\footrule}{\hbox to\headwidth{\color{rulegray}\leaders\hrule height 0.3pt\hfill}}%
+  \fancyfoot[L]{\footnotesize\textbf{\color{headergray}CaseMirror}}%
+  \fancyfoot[R]{\footnotesize\color{headergray}\thepage}%
+}
+
+% -- Column rule --
+\setlength{\columnseprule}{0.15pt}
+\renewcommand{\columnseprulecolor}{\color{rulegray}}
+
+% -- Title --
+\title{\vspace{-1.8em}\LARGE\bfseries\color{titlebg} Codex Native Hooks: Verification Before Adopting mickn's Architecture\vspace{-0.3em}}
+\author{CaseMirror Research \\ \small\itshape\href{https://casemirror.ai}{\textcolor{headergray}{casemirror.ai}}}
+\date{{\small\color{headergray} \today}}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{firstpage}
+\vspace{-0.5em}
+
+
+\textbf{Generated:} 2026-04-28
+
+\textbf{Topic:} Does the OpenAI Codex CLI actually support \texttt{SessionStart}, \texttt{UserPromptSubmit}, and \texttt{Stop} hooks natively today, or is \texttt{mickn:main}'s rewrite conditional on a future Codex release?
+
+
+\subsection{Executive Summary}
+
+\textbf{Codex native hooks are real, shipped, and stable.} The OpenAI Codex
+
+CLI exposes \texttt{SessionStart}, \texttt{UserPromptSubmit}, and \texttt{Stop} as first-class
+
+hook events documented at \texttt{developers.openai.com/\allowbreak codex/\allowbreak hooks}. Hooks
+
+were marked stable in \textbf{v0.122.0 (2026-04-20)} via PR \#19012
+
+("Mark codex\_hooks stable"). The locally installed version on this
+
+machine is \textbf{\texttt{codex-\allowbreak cli 0.125.0}} — three releases past the stable
+
+cutoff and well within the supported window.
+
+
+\texttt{mickn:main}'s v5.0.0 rewrite — which deletes the PTY wrapper, expect
+
+bridge, and queue emitter, replacing them with \texttt{taskmaster-\allowbreak session-\allowbreak start.sh},
+
+\texttt{taskmaster-\allowbreak user-\allowbreak prompt-\allowbreak submit.sh}, and \texttt{taskmaster-\allowbreak stop.sh} — therefore
+
+does \textbf{not} depend on any unreleased Codex feature. It targets shipping,
+
+documented behavior. All three preconditions from the original fork
+
+review (\texttt{docs/\allowbreak upstream-\allowbreak reviews/\allowbreak blader-\allowbreak taskmaster-\allowbreak forks.md} §B1) are
+
+satisfied:
+
+
+\begin{enumerate}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item Codex CLI exposes \texttt{SessionStart}, \texttt{UserPromptSubmit}, and \texttt{Stop} ✅
+  \item The native \texttt{Stop} hook supports \texttt{decision: "block"} continuation ✅
+  \item \texttt{last\_assistant\_message} is populated on Stop events ✅ (with one
+\end{enumerate}
+   caveat — see §3)
+
+
+The answer to the open question is: **proceed with the port. The
+
+wrapper layer is dead weight on Codex 0.122+.** Two caveats worth
+
+gating on are documented in §3 and flow into the punch list.
+
+
+\subsection{Research Findings}
+
+\subsubsection{Hook events explicitly documented}
+
+The official Codex hooks reference
+
+(\href{https://developers.openai.com/codex/hooks}{developers.openai.com/codex/hooks})
+
+lists six hook events: \texttt{SessionStart}, \texttt{PreToolUse}, \texttt{PermissionRequest},
+
+\texttt{PostToolUse}, \texttt{UserPromptSubmit}, \texttt{Stop}. The three Taskmaster needs
+
+are all present and have dedicated sections.
+
+
+Hooks are configured via \texttt{\textasciitilde{}/\allowbreak .codex/\allowbreak hooks.json} (user scope) or
+
+\texttt{<repo>/\allowbreak .codex/\allowbreak hooks.json} (project scope), with optional inline
+
+configuration in \texttt{config.toml}. Per-layer hooks are merged, not
+
+overridden — higher-precedence layers add to lower ones. Project-local
+
+hooks only load when the \texttt{.codex/\allowbreak } layer is trusted.
+
+
+\subsubsection{\texttt{Stop} hook semantics match Claude Code}
+
+The docs explicitly state, for the \texttt{Stop} event:
+
+
+> "For this event, \texttt{decision: "block"} doesn't reject the turn.
+
+> Instead, it tells Codex to continue and automatically creates a new
+
+> continuation prompt"
+
+
+The \texttt{reason} field becomes the continuation prompt. This is the same
+
+contract Claude Code's Stop hook uses, which is exactly what
+
+\texttt{taskmaster-\allowbreak stop.sh} needs in order to push a TASKMASTER continuation
+
+prompt back into the same running session.
+
+
+\texttt{Stop}'s stdin payload includes:
+
+
+\begin{itemize}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item \texttt{turn\_id} — the active Codex turn ID
+  \item \texttt{stop\_hook\_active} — whether continuation has already occurred
+\end{itemize}
+  (the standard guard against infinite re-fire loops; matches Claude's
+
+  field of the same name)
+
+\begin{itemize}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item \texttt{last\_assistant\_message} — "Latest assistant message text, if available"
+\end{itemize}
+
+The "if available" caveat on \texttt{last\_assistant\_message} is the only
+
+non-trivial parity gap with Claude Code. It is the basis for caveat
+
+(C2) in §3.
+
+
+\subsubsection{Release timeline}
+
+From the Codex changelog
+
+(\href{https://developers.openai.com/codex/changelog}{developers.openai.com/codex/changelog}):
+
+
+\vspace{0.4em}
+\noindent
+\small
+\begin{tabularx}{\columnwidth}{@{}XXX@{}}
+\toprule
+\textbf{Version} & \textbf{Date} & \textbf{Hook-related change} \\
+\midrule
+v0.116.0 & 2026-03 & Hooks present in experimental form (referenced in issue \#15266 reproductions) \\
+v0.122.0 & 2026-04-20 & \texttt{PermissionRequest} hooks added (\#17563); OTEL metrics for hook runs (\#18026) \\
+v0.123.0 & 2026-04-23 & Hooks in \texttt{config.toml} / \texttt{requirements.toml} (\#18893); MCP tool support in hooks (\#18385); \textbf{\texttt{codex\_hooks} marked stable (\#19012)} \\
+v0.124.0 & 2026-04-23 & \texttt{apply\_patch} emits hooks (\#18391); Bash \texttt{PostToolUse} on \texttt{exec\_command} (\#18888); \textbf{regression: hooks broke at startup if config used map syntax (\#19199)} \\
+v0.125.0 & 2026-04 & (locally installed; current) \\
+\bottomrule
+\end{tabularx}
+\vspace{0.4em}
+
+The stable marker landed eight days before this report. mickn's rewrite
+
+(repo timeline aligns with v5.0.0 around the same window) targets the
+
+post-stable surface, not pre-release behavior.
+
+
+\subsubsection{Known issues that don't block adoption but warrant gating}
+
+**Issue \#15266 — SessionStart + UserPromptSubmit fire simultaneously on
+
+first prompt** (\href{https://github.com/openai/codex/issues/15266}{github.com/openai/codex/issues/15266}).
+
+Filed against v0.116.0 (March 2026). Closed, but the closing
+
+commit/version is not visible in the page content. Behavior described:
+
+on the first prompt of a session, both hooks fire concurrently rather
+
+than \texttt{SessionStart} completing before \texttt{UserPromptSubmit}. On subsequent
+
+prompts, only \texttt{UserPromptSubmit} fires correctly.
+
+
+Implication for Taskmaster: if \texttt{taskmaster-\allowbreak session-\allowbreak start.sh} writes
+
+state that \texttt{taskmaster-\allowbreak user-\allowbreak prompt-\allowbreak submit.sh} reads (e.g.,
+
+seeding the per-session state file), there's a race on the first
+
+prompt. mickn's \texttt{taskmaster-\allowbreak session-\allowbreak start.sh} is 27 LOC — small enough
+
+to inspect for whether it depends on this ordering. We should verify
+
+on 0.125.0 before merging.
+
+
+\textbf{Issue \#19199 — v0.124.0 hook config parsing regression}
+
+(\href{https://github.com/openai/codex/issues/19199}{github.com/openai/codex/issues/19199}).
+
+\texttt{codex-\allowbreak cli} failed to start when hooks were configured in
+
+\texttt{config.toml} using map syntax (the documented form). Closed; resolution
+
+version not shown. The local install is 0.125.0, which post-dates the
+
+fix, so this is informational only — but it's a reminder that hook
+
+config schemas are still in flux at the toml-vs-json boundary.
+
+
+\subsubsection{Third-party confirmation}
+
+Independent projects already shipping against Codex's native hooks:
+
+
+\begin{itemize}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item \textbf{\texttt{hatayama/\allowbreak codex-\allowbreak hooks}} — a hooks runner that reuses Claude
+\end{itemize}
+  Code's hooks settings against Codex CLI
+
+  (\href{https://github.com/hatayama/codex-hooks}{github.com/hatayama/codex-hooks}).
+
+  Existence of this project confirms the surface is real and
+
+  Claude-Code-compatible enough to be adapted.
+
+\begin{itemize}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item \textbf{\texttt{Yeachan-\allowbreak Heo/\allowbreak oh-\allowbreak my-\allowbreak codex} (OmX)} — a Codex enhancement framework
+\end{itemize}
+  with an active roadmap issue (\#1307) about mapping its hook surfaces
+
+  onto Codex's native hooks, indicating a community migration from
+
+  bespoke wrappers to native is in progress.
+
+\begin{itemize}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item \textbf{ArcKit v4} — released March 2026 with first-class Codex hooks
+\end{itemize}
+  support
+
+  (\href{https://medium.com/arckit/arckit-v4-first-class-codex-and-gemini-support-with-hooks-mcp-servers-and-native-policies-abdf9569e00e}{medium.com/arckit/arckit-v4}).
+
+
+The pattern across all three: bespoke PTY/wrapper hacks are being
+
+deleted in favor of the native hook surface throughout April 2026.
+
+mickn's rewrite is the same move applied to Taskmaster.
+
+
+\subsection{Analysis}
+
+The fork review's §B1 set three preconditions for adopting mickn's
+
+wholesale wrapper deletion. All three are satisfied:
+
+
+\begin{enumerate}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item \textbf{Codex CLI exposes SessionStart/UserPromptSubmit/Stop hooks}
+\end{enumerate}
+   in the version the user is on. Local install: \texttt{codex-\allowbreak cli 0.125.0}.
+
+   Hook events documented since v0.122 stable; we are on 0.125.
+
+   ✅ confirmed.
+
+
+\begin{enumerate}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item \textbf{The native \texttt{Stop} hook supports \texttt{decision: "block"} continuation}
+\end{enumerate}
+   in the same way Claude Code does. Documented verbatim in
+
+   \texttt{developers.openai.com/\allowbreak codex/\allowbreak hooks}: "doesn't reject the turn.
+
+   Instead, it tells Codex to continue and automatically creates a new
+
+   continuation prompt." ✅ confirmed.
+
+
+\begin{enumerate}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item \textbf{\texttt{last\_assistant\_message} is populated by Codex on stop events.}
+\end{enumerate}
+   Documented as a Stop-event stdin field, with the qualifier "if
+
+   available." This matches Claude Code's behavior, which also has
+
+   cases where the field is empty (e.g., when the assistant emits no
+
+   message text on stop). ⚠️ confirmed-with-caveat.
+
+
+The caveat on (3) is meaningful but not blocking. The current fork's
+
+detection is layered: \texttt{last\_assistant\_message} for primary detection,
+
+transcript-grep for explicit \texttt{TASKMASTER\_DONE::<session\_id>} token as
+
+fallback. That layering should survive the port unchanged — the
+
+fallback handles the "if available" gap.
+
+
+The PTY wrapper, expect bridge, and queue emitter become genuinely
+
+redundant at 0.122+. They cost LOC, complexity, and a \texttt{expect} runtime
+
+dependency. Their only remaining justification was as a portability
+
+floor for Codex versions without native hooks — which now means
+
+versions older than April 2026, a window users will only stay in
+
+deliberately.
+
+
+The right migration shape mirrors §B1's hedge: keep both code paths,
+
+gate on \texttt{codex -\allowbreak -\allowbreak version} or a feature probe (`codex --help | grep -q
+
+hook\texttt{ or test for the }\textasciitilde{}/.codex/hooks.json` schema), and let
+
+\texttt{install.sh} choose. Default to native on detection, fall back to
+
+wrapper on older Codex. Delete the wrapper path only after a deprecation
+
+window where logs confirm zero installs are using it.
+
+
+\subsection{Recommendations}
+
+Adopt mickn's native-hooks architecture, but stage it. Two safety
+
+rails make this safe rather than risky:
+
+
+\begin{enumerate}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item \textbf{Version-gated install.} Probe Codex version in \texttt{install.sh}.
+\end{enumerate}
+   If \texttt{>= 0.122.0}, install native hooks; if \texttt{< 0.122.0} or no codex
+
+   detected, install the existing wrapper path. The user's machine
+
+   (0.125.0) gets the native path automatically.  
+
+\begin{enumerate}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item \textbf{Keep the wrapper path on disk.} Don't \texttt{git rm} the PTY wrapper,
+\end{enumerate}
+   expect bridge, or their tests in the same PR. Mark them
+
+   \texttt{legacy/\allowbreak }-prefixed and have \texttt{install.sh} install from \texttt{legacy/\allowbreak }
+
+   when version-gated. Plan to remove them after one minor release if
+
+   no one reports using them.
+
+
+The \texttt{last\_assistant\_message} + transcript-token layered detection
+
+already in the fork is the right pattern and ports cleanly. Do not
+
+collapse to a single detection mode.
+
+
+\subsection{Punch List (for \texttt{/\allowbreak mei})}
+
+Each item is a self-contained adoption decision. Numbered for
+
+priority. Phase tags only — no time estimates.
+
+
+\begin{enumerate}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item \textbf{[Phase 1, HIGH] Add Codex version probe to \texttt{install.sh}.}
+\end{enumerate}
+   Detect \texttt{codex -\allowbreak -\allowbreak version} and parse semver; expose as
+
+   \texttt{$CODEX\_HOOKS\_NATIVE} (true if \texttt{>= 0.122.0}). Touches only
+
+   \texttt{install.sh}. No behavior change yet — just the detection.
+
+
+\begin{enumerate}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item **[Phase 1, HIGH] Port \texttt{taskmaster-\allowbreak session-\allowbreak start.sh} from
+\end{enumerate}
+   \texttt{mickn:main}.** 27 LOC. Place at \texttt{hooks/\allowbreak taskmaster-\allowbreak session-\allowbreak start.sh}.
+
+   Verify it does not depend on completing-before-\texttt{UserPromptSubmit}
+
+   ordering (issue \#15266). If it does, add a state-file lock that
+
+   both hooks honor.
+
+
+\begin{enumerate}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item \textbf{[Phase 1, HIGH] Port \texttt{taskmaster-\allowbreak stop.sh} from \texttt{mickn:main}.}
+\end{enumerate}
+   356 LOC. Replaces the wrapper's stop-detection role. Must emit
+
+   \texttt{decision: "block"} JSON with the shared compliance prompt as
+
+   \texttt{reason}. Reuses \texttt{taskmaster-\allowbreak compliance-\allowbreak prompt.sh}. Keep the
+
+   \texttt{last\_assistant\_message} → transcript-token fallback layered
+
+   detection.
+
+
+\begin{enumerate}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item **[Phase 1, HIGH] Port \texttt{taskmaster-\allowbreak user-\allowbreak prompt-\allowbreak submit.sh} from
+\end{enumerate}
+   \texttt{mickn:main}.** 107 LOC. Implements per-turn external user prompt
+
+   capture with \texttt{<hook\_prompt>} filtering. This is pattern A1 from the
+
+   fork review and the highest-value behavioral upgrade.
+
+
+\begin{enumerate}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item \textbf{[Phase 1, MEDIUM] Move existing wrapper artifacts to \texttt{legacy/\allowbreak }.}
+\end{enumerate}
+   \texttt{hooks/\allowbreak inject-\allowbreak continue-\allowbreak codex.sh}, \texttt{hooks/\allowbreak run-\allowbreak codex-\allowbreak expect-\allowbreak bridge.exp},
+
+   \texttt{run-\allowbreak taskmaster-\allowbreak codex.sh}, plus their tests in
+
+   \texttt{tests/\allowbreak inject-\allowbreak continue-\allowbreak codex.test.sh} etc. Update \texttt{install.sh} to
+
+   choose \texttt{hooks/\allowbreak } (native) or \texttt{legacy/\allowbreak } (wrapper) based on the
+
+   version probe.
+
+
+\begin{enumerate}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item \textbf{[Phase 1, MEDIUM] Write \texttt{\textasciitilde{}/\allowbreak .codex/\allowbreak hooks.json} template} in
+\end{enumerate}
+   \texttt{install.sh} mapping the three event names to the three new
+
+   \texttt{hooks/\allowbreak taskmaster-\allowbreak *.sh} scripts. Merge-safe with any existing
+
+   user hooks (don't clobber).
+
+
+\begin{enumerate}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item \textbf{[Phase 2, MEDIUM] Add a feature smoke test:} create `taskmaster
+\end{enumerate}
+   selftest --codex-hooks` that fires a no-op session, asserts each of
+
+   the three hooks executed via state-file markers, and reports OK/FAIL.
+
+   Exercised in \texttt{install.sh -\allowbreak -\allowbreak verify} and CI.
+
+
+\begin{enumerate}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item **[Phase 2, LOW] Document the version gate in
+\end{enumerate}
+   \texttt{docs/\allowbreak SPEC.md}.** Single section explaining the dual code paths,
+
+   the 0.122.0 cutover, the issue-\#15266 race awareness, and the
+
+   deprecation plan for \texttt{legacy/\allowbreak }.
+
+
+\begin{enumerate}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item \textbf{[Phase 3, LOW] Sunset \texttt{legacy/\allowbreak } after one minor release} if no
+\end{enumerate}
+   reports of installs using it. Track via an \texttt{install.sh}
+
+   instrumentation line that logs which path was selected. Drop after
+
+   evidence justifies it.
+
+
+\begin{enumerate}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item \textbf{[Phase 3, LOW] Watch upstream issue \#15266} for a definitive
+\end{enumerate}
+    fix-version. If the simultaneous-fire race is confirmed fixed in
+
+    a known version, tighten \texttt{$CODEX\_HOOKS\_NATIVE} lower bound to
+
+    that version and remove any race-mitigation lock added in (2).
+
+
+\subsection{Sources}
+
+\begin{itemize}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
+  \item \href{https://developers.openai.com/codex/hooks}{Hooks – Codex | OpenAI Developers} — primary reference; documents all six hook events including \texttt{SessionStart}, \texttt{UserPromptSubmit}, \texttt{Stop}. Contains the verbatim specification of \texttt{decision: "block"} for \texttt{Stop} and the \texttt{last\_assistant\_message} field.
+  \item \href{https://developers.openai.com/codex/changelog}{Changelog – Codex | OpenAI Developers} — release timeline confirming hooks went stable in v0.122.0 (April 20, 2026) via PR \#19012 "Mark codex\_hooks stable."
+  \item \href{https://github.com/openai/codex/issues/15266}{Issue \#15266 — UserPromptSubmit and SessionStart hooks fire simultaneously on first prompt} — known caveat, filed v0.116.0 (March 2026), closed.
+  \item \href{https://github.com/openai/codex/issues/19199}{Issue \#19199 — codex-cli 0.124.0 fails to start when hook config is present and codex\_hooks is enabled} — informational; not a blocker on 0.125.0.
+  \item \href{https://github.com/openai/codex/pull/14867}{PR \#14867 — hooks: use a user message > developer message for prompt continuation} — early-development context for hook continuation semantics.
+  \item \href{https://github.com/openai/codex/pull/15118}{PR \#15118 — hooks: turn\_id extension for Stop \& UserPromptSubmit} — confirms \texttt{turn\_id} field added to the stdin payload of these specific hooks.
+  \item \href{https://github.com/openai/codex/discussions/2150}{Discussion \#2150 — Hook would be a great feature} — historical context for how hooks landed.
+  \item \href{https://github.com/hatayama/codex-hooks}{hatayama/codex-hooks} — third-party hooks runner reusing Claude Code's hooks settings against Codex; corroborates Claude-compatible surface.
+  \item \href{https://github.com/Yeachan-Heo/oh-my-codex/issues/1307}{Yeachan-Heo/oh-my-codex issue \#1307 — roadmap: map OMC hook surfaces onto OMX native Codex hooks} — community-wide migration pattern from bespoke wrappers to native hooks.
+  \item \href{https://medium.com/arckit/arckit-v4-first-class-codex-and-gemini-support-with-hooks-mcp-servers-and-native-policies-abdf9569e00e}{ArcKit v4: First-Class Codex and Gemini Support with Hooks} — independent third-party adoption of the same hook surface in March 2026.
+  \item Local fork review: \texttt{docs/\allowbreak upstream-\allowbreak reviews/\allowbreak blader-\allowbreak taskmaster-\allowbreak forks.md} §B1 — the three preconditions verified by this report.
+  \item Local Codex install: \texttt{codex-\allowbreak cli 0.125.0} (\texttt{/\allowbreak usr/\allowbreak local/\allowbreak bin/\allowbreak codex}) — three releases past the stable cutoff.
+\end{itemize}
+
+
+\balance
+\end{document}

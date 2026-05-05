@@ -1,7 +1,7 @@
 # Taskmaster
 ## Product & Technical Specification
 
-**Version**: 4.2.0  
+**Version**: 4.3.0  
 **Scope**:
 - `taskmaster/check-completion.sh`
 - `taskmaster/taskmaster-compliance-prompt.sh`
@@ -78,6 +78,48 @@ TASKMASTER_DONE::<session_id>
 - Injects payload into the same Codex PTY via bracketed paste.
 - Submits prompt with Enter after fixed short delay.
 
+### 3.5 Hook-injected prompt tag
+
+Every prompt the hook injects starts with a single-line tag:
+
+```
+[taskmaster:injected v=1 kind=<kind>]
+<actual content...>
+```
+
+`<kind>` ∈ `stop-block | followup | compliance | session-start | verifier-feedback`.
+The `compliance` and `session-start` kinds are reserved for future use (T2 native Codex hooks, T3 semantic verifier); only `stop-block`, `followup`, and `verifier-feedback` are emitted in v4.3.0.
+
+Downstream consumers (UserPromptSubmit hook, completion verifier, external
+tooling) detect injected prompts via `is_taskmaster_injected_prompt` from
+`taskmaster-prompt-detect.sh`. Legacy substring detection is preserved for
+prompts emitted before this version.
+
+### 3.6 Session state file
+
+Path: `${TASKMASTER_STATE_DIR:-${TMPDIR:-/tmp}/taskmaster/state}/<session_id>.json`
+
+Schema (v1):
+
+```json
+{
+  "schema_version": 1,
+  "session_id": "<sid>",
+  "created_at": "<iso8601>",
+  "updated_at": "<iso8601>",
+  "stop_count": 0,
+  "latest_user_prompt": null,
+  "last_verifier_run": null,
+  "metadata": {}
+}
+```
+
+All writes go through `flock` on `<path>.lock` and atomic tmp+mv.
+
+**Legacy migration:** on first read per session, the hook absorbs any
+existing counter file at `${TMPDIR}/taskmaster/<session_id>` into
+`stop_count` and deletes the legacy file. Idempotent.
+
 ## 4. Installation Behavior
 
 `install.sh` auto-detects Codex and/or Claude and installs matching targets.
@@ -97,6 +139,24 @@ Fixed:
 - poll interval: `1` second
 - Codex transport: expect only
 - expect payload mode + submit timing
+
+### 5.1 Optional verifier command
+
+| Env var | Default | Meaning |
+|---|---|---|
+| `TASKMASTER_VERIFY_COMMAND` | unset | Shell command run when the done token is seen. Empty/unset = skip. |
+| `TASKMASTER_VERIFY_TIMEOUT` | `60` | Seconds before SIGTERM, +5s grace before SIGKILL. |
+| `TASKMASTER_VERIFY_MAX_OUTPUT` | `4000` | Bytes of combined stdout+stderr echoed back into the block reason. |
+| `TASKMASTER_VERIFY_CWD` | unset | If set, `cd` here before invoking. Else inherit hook's cwd. |
+
+When `TASKMASTER_VERIFY_COMMAND` is set, stop is allowed only when (a) the
+done token is present **and** (b) the command exits 0. A failing verifier
+overrides token-based completion and blocks with the command's exit code and
+truncated output.
+
+The verifier runs **only** when the done token is present, not on every stop
+attempt — this keeps slow verifiers (test suites, builds) from gating
+mid-work stop attempts.
 
 ## 6. Operational Notes
 

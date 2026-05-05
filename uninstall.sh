@@ -201,6 +201,10 @@ uninstall_claude() {
   echo "Removing Taskmaster from Claude..."
   remove_claude_stop_hook_from_settings "$CLAUDE_SETTINGS_PATH"
   remove_symlink_if_target "$CLAUDE_HOOK_LINK" "$CLAUDE_CHECK_SCRIPT"
+  rm -f "$CLAUDE_ROOT/hooks/taskmaster-compliance-prompt.sh"
+  rm -f "$CLAUDE_ROOT/hooks/taskmaster-verify-command.sh"
+  rm -f "$CLAUDE_ROOT/hooks/taskmaster-prompt-detect.sh"
+  rm -f "$CLAUDE_ROOT/hooks/taskmaster-state.sh"
   remove_dir_if_exists "$CLAUDE_SKILL_DIR"
 }
 

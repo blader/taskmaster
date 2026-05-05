@@ -15,6 +15,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/../taskmaster-compliance-prompt.sh"
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/../taskmaster-prompt-detect.sh"
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/../taskmaster-state.sh"
 
 usage() {
   cat <<'USAGE'
@@ -173,7 +177,10 @@ build_reprompt() {
 
   shared_prompt="$(build_taskmaster_compliance_prompt "$token")"
 
+  local injected_tag
+  injected_tag="$(generate_taskmaster_injected_tag followup)"
   cat <<RE-PROMPT
+${injected_tag}
 TASKMASTER: Stop is blocked until completion is explicitly confirmed.
 
 ${shared_prompt}
@@ -213,6 +220,9 @@ inject_prompt() {
   printf '%s' "$prompt" > "$prompt_file"
 
   INJECTION_COUNT=$((INJECTION_COUNT + 1))
+  if [[ -n "${SESSION_ID:-}" ]]; then
+    taskmaster_state_increment_stop_count "$SESSION_ID" 2>/dev/null || true
+  fi
   log_runtime "queued continuation prompt turn=${turn_id:-<unknown>} count=${INJECTION_COUNT} file=${prompt_file}"
   if [[ "$QUIET" -eq 0 ]]; then
     echo "[TASKMASTER] queued continuation prompt for turn ${turn_id:-<unknown>} (count=${INJECTION_COUNT}, file=${prompt_file})." >&2

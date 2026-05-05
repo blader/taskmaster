@@ -6,13 +6,23 @@
 #   TASKMASTER_DONE::<session_id>
 #
 # Optional env vars:
-#   TASKMASTER_MAX          Max number of blocks before allowing stop (default: 0 = infinite)
+#   TASKMASTER_MAX          Max number of blocks before allowing stop (default: 100)
 #
-set -euo pipefail
+# errexit (-e) deliberately omitted — matches hooks/check-completion.sh.
+# Hook MUST emit a decision JSON; a non-zero from a helper lib (e.g.
+# taskmaster_state_update on a corrupt state file) shouldn't abort before
+# the final jq -n write. Per-call error handling lives at the call sites.
+set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/taskmaster-compliance-prompt.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/taskmaster-verify-command.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/taskmaster-prompt-detect.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/taskmaster-state.sh"
 
 INPUT=$(cat)
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id')
@@ -31,16 +41,13 @@ if [ -f "$TRANSCRIPT" ]; then
   fi
 fi
 
-# --- counter ---
-COUNTER_DIR="${TMPDIR:-/tmp}/taskmaster"
-mkdir -p "$COUNTER_DIR"
-COUNTER_FILE="${COUNTER_DIR}/${SESSION_ID}"
-MAX=${TASKMASTER_MAX:-0}
+# --- counter (state-file backed) ---
+taskmaster_state_migrate_legacy_counter "$SESSION_ID"
+taskmaster_state_init "$SESSION_ID"
 
-COUNT=0
-if [ -f "$COUNTER_FILE" ]; then
-  COUNT=$(cat "$COUNTER_FILE" 2>/dev/null || echo "0")
-fi
+MAX=${TASKMASTER_MAX:-100}
+COUNT="$(taskmaster_state_jq "$SESSION_ID" '.stop_count')"
+[[ "$COUNT" =~ ^[0-9]+$ ]] || COUNT=0
 
 transcript_has_done_signal() {
   local transcript_path="$1"
@@ -85,16 +92,32 @@ if [ -f "$TRANSCRIPT" ]; then
 fi
 
 if [ "$HAS_DONE_SIGNAL" = true ]; then
-  rm -f "$COUNTER_FILE"
+  if [ -n "${TASKMASTER_VERIFY_COMMAND:-}" ]; then
+    if taskmaster_run_verify_command; then
+      taskmaster_state_update "$SESSION_ID" '.stop_count = 0'
+      exit 0
+    else
+      VERIFY_REASON="$(generate_taskmaster_injected_tag verifier-feedback)
+TASKMASTER: verifier failed (exit=${TASKMASTER_VERIFY_EXIT_CODE}). Command: ${TASKMASTER_VERIFY_COMMAND}
+
+Output (last ${TASKMASTER_VERIFY_MAX_OUTPUT:-4000} bytes):
+${TASKMASTER_VERIFY_OUTPUT_TAIL}
+
+Token alone is insufficient when a verifier is configured. Fix the failures and try again."
+      jq -n --arg reason "$VERIFY_REASON" '{ decision: "block", reason: $reason }'
+      exit 0
+    fi
+  fi
+  taskmaster_state_update "$SESSION_ID" '.stop_count = 0'
   exit 0
 fi
 
+taskmaster_state_increment_stop_count "$SESSION_ID"
 NEXT=$((COUNT + 1))
-echo "$NEXT" > "$COUNTER_FILE"
 
-# Optional escape hatch. Default is infinite (0) so hook keeps firing.
+# Optional escape hatch after MAX continuations.
 if [ "$MAX" -gt 0 ] && [ "$NEXT" -ge "$MAX" ]; then
-  rm -f "$COUNTER_FILE"
+  taskmaster_state_update "$SESSION_ID" '.stop_count = 0'
   exit 0
 fi
 
@@ -112,7 +135,9 @@ fi
 
 # --- reprompt ---
 SHARED_PROMPT="$(build_taskmaster_compliance_prompt "$DONE_SIGNAL")"
-REASON="${LABEL}: ${PREAMBLE}
+INJECTED_TAG="$(generate_taskmaster_injected_tag stop-block)"
+REASON="${INJECTED_TAG}
+${LABEL}: ${PREAMBLE}
 
 ${SHARED_PROMPT}"
 
